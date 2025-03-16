@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RAG System</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        padding-top: 20px;
+      }
+      .tab-content {
+        padding-top: 20px;
+      }
+      #chat-messages {
+        height: 400px;
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        padding: 10px;
+        margin-bottom: 10px;
+      }
+      .user-message {
+        background-color: #e9ecef;
+        padding: 8px 12px;
+        border-radius: 15px;
+        margin-bottom: 10px;
+        max-width: 75%;
+        align-self: flex-end;
+        margin-left: auto;
+      }
+      .assistant-message {
+        background-color: #f8f9fa;
+        padding: 8px 12px;
+        border-radius: 15px;
+        margin-bottom: 10px;
+        max-width: 75%;
+      }
+      .spinner-container {
+        display: none;
+        text-align: center;
+        padding: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="text-center mb-4">RAG System</h1>
+
+      <ul class="nav nav-tabs" id="myTab" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link active"
+            id="index-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#index"
+            type="button"
+            role="tab"
+            aria-controls="index"
+            aria-selected="true"
+          >
+            Index Documents
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            id="query-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#query"
+            type="button"
+            role="tab"
+            aria-controls="query"
+            aria-selected="false"
+          >
+            Query Documents
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            id="ask-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#ask"
+            type="button"
+            role="tab"
+            aria-controls="ask"
+            aria-selected="false"
+          >
+            Ask Questions
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            id="chat-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#chat"
+            type="button"
+            role="tab"
+            aria-controls="chat"
+            aria-selected="false"
+          >
+            Chat
+          </button>
+        </li>
+      </ul>
+
+      <div class="tab-content" id="myTabContent">
+        <!-- Index Tab -->
+        <div
+          class="tab-pane fade show active"
+          id="index"
+          role="tabpanel"
+          aria-labelledby="index-tab"
+        >
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Index Documents</h5>
+              <p class="card-text">
+                Index documents in your data directory to make them searchable.
+              </p>
+              <button id="indexButton" class="btn btn-primary">
+                Start Indexing
+              </button>
+              <div class="spinner-container" id="indexSpinner">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Indexing documents... This might take a while.</p>
+              </div>
+              <div id="indexResult" class="mt-3"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Query Tab -->
+        <div
+          class="tab-pane fade"
+          id="query"
+          role="tabpanel"
+          aria-labelledby="query-tab"
+        >
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Query Documents</h5>
+              <p class="card-text">
+                Find relevant document chunks related to your query.
+              </p>
+              <div class="mb-3">
+                <label for="queryInput" class="form-label">Your Query</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="queryInput"
+                  placeholder="Enter your query here"
+                />
+              </div>
+              <button id="queryButton" class="btn btn-primary">Search</button>
+              <div class="spinner-container" id="querySpinner">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Searching for relevant documents...</p>
+              </div>
+              <div id="queryResult" class="mt-3"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ask Tab -->
+        <div
+          class="tab-pane fade"
+          id="ask"
+          role="tabpanel"
+          aria-labelledby="ask-tab"
+        >
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Ask Questions</h5>
+              <p class="card-text">
+                Get answers to your questions based on the indexed documents.
+              </p>
+              <div class="mb-3">
+                <label for="questionInput" class="form-label"
+                  >Your Question</label
+                >
+                <input
+                  type="text"
+                  class="form-control"
+                  id="questionInput"
+                  placeholder="Enter your question here"
+                />
+              </div>
+              <button id="askButton" class="btn btn-primary">Get Answer</button>
+              <div class="spinner-container" id="askSpinner">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Generating answer...</p>
+              </div>
+              <div id="askResult" class="mt-3"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Tab -->
+        <div
+          class="tab-pane fade"
+          id="chat"
+          role="tabpanel"
+          aria-labelledby="chat-tab"
+        >
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Chat</h5>
+              <p class="card-text">
+                Have a conversation with the RAG chatbot. Type 'reset' to clear
+                history.
+              </p>
+              <div id="chat-messages"></div>
+              <div class="input-group mb-3">
+                <input
+                  type="text"
+                  class="form-control"
+                  id="chatInput"
+                  placeholder="Type your message here"
+                />
+                <button id="chatButton" class="btn btn-primary">Send</button>
+              </div>
+              <div class="spinner-container" id="chatSpinner">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Getting response...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Index Documents
+        document
+          .getElementById("indexButton")
+          .addEventListener("click", function () {
+            document.getElementById("indexSpinner").style.display = "block";
+            document.getElementById("indexResult").innerHTML = "";
+
+            fetch("/index_documents", {
+              method: "POST",
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                document.getElementById("indexSpinner").style.display = "none";
+                if (data.success) {
+                  document.getElementById("indexResult").innerHTML = `
+                            <div class="alert alert-success" role="alert">
+                                ${data.message}
+                            </div>`;
+                } else {
+                  document.getElementById("indexResult").innerHTML = `
+                            <div class="alert alert-danger" role="alert">
+                                Error: ${data.message}
+                            </div>`;
+                }
+              })
+              .catch((error) => {
+                document.getElementById("indexSpinner").style.display = "none";
+                document.getElementById("indexResult").innerHTML = `
+                        <div class="alert alert-danger" role="alert">
+                            Error: ${error.message}
+                        </div>`;
+              });
+          });
+
+        // Query Documents
+        document
+          .getElementById("queryButton")
+          .addEventListener("click", function () {
+            const query = document.getElementById("queryInput").value.trim();
+            if (!query) {
+              document.getElementById("queryResult").innerHTML = `
+                        <div class="alert alert-warning" role="alert">
+                            Please enter a query.
+                        </div>`;
+              return;
+            }
+
+            document.getElementById("querySpinner").style.display = "block";
+            document.getElementById("queryResult").innerHTML = "";
+
+            const formData = new FormData();
+            formData.append("query", query);
+
+            fetch("/query", {
+              method: "POST",
+              body: formData,
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                document.getElementById("querySpinner").style.display = "none";
+                if (data.success) {
+                  let resultsHTML = `<h4 class="mt-4">Results for: "${data.query}"</h4>`;
+                  if (data.results.length > 0) {
+                    resultsHTML += '<div class="list-group">';
+                    data.results.forEach((result) => {
+                      resultsHTML += `
+                                    <div class="list-group-item">
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <h5 class="mb-1">Result ${result.id}</h5>
+                                            <small>Similarity: ${result.similarity}</small>
+                                        </div>
+                                        <p class="mb-1"><strong>Source:</strong> ${result.source}, Page: ${result.page}</p>
+                                        <p class="mb-1">${result.content}</p>
+                                    </div>`;
+                    });
+                    resultsHTML += "</div>";
+                  } else {
+                    resultsHTML += `<div class="alert alert-info">No results found.</div>`;
+                  }
+                  document.getElementById("queryResult").innerHTML =
+                    resultsHTML;
+                } else {
+                  document.getElementById("queryResult").innerHTML = `
+                            <div class="alert alert-danger" role="alert">
+                                Error: ${data.message}
+                            </div>`;
+                }
+              })
+              .catch((error) => {
+                document.getElementById("querySpinner").style.display = "none";
+                document.getElementById("queryResult").innerHTML = `
+                        <div class="alert alert-danger" role="alert">
+                            Error: ${error.message}
+                        </div>`;
+              });
+          });
+
+        // Ask Question
+        document
+          .getElementById("askButton")
+          .addEventListener("click", function () {
+            const question = document
+              .getElementById("questionInput")
+              .value.trim();
+            if (!question) {
+              document.getElementById("askResult").innerHTML = `
+                        <div class="alert alert-warning" role="alert">
+                            Please enter a question.
+                        </div>`;
+              return;
+            }
+
+            document.getElementById("askSpinner").style.display = "block";
+            document.getElementById("askResult").innerHTML = "";
+
+            const formData = new FormData();
+            formData.append("query", question);
+
+            fetch("/ask", {
+              method: "POST",
+              body: formData,
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                document.getElementById("askSpinner").style.display = "none";
+                if (data.success) {
+                  document.getElementById("askResult").innerHTML = `
+                            <div class="card mt-3">
+                                <div class="card-header">
+                                    <strong>Question:</strong> ${data.question}
+                                </div>
+                                <div class="card-body">
+                                    <p class="card-text">${data.answer}</p>
+                                </div>
+                            </div>`;
+                } else {
+                  document.getElementById("askResult").innerHTML = `
+                            <div class="alert alert-danger" role="alert">
+                                Error: ${data.message}
+                            </div>`;
+                }
+              })
+              .catch((error) => {
+                document.getElementById("askSpinner").style.display = "none";
+                document.getElementById("askResult").innerHTML = `
+                        <div class="alert alert-danger" role="alert">
+                            Error: ${error.message}
+                        </div>`;
+              });
+          });
+
+        // Load chat history
+        function loadChatHistory() {
+          fetch("/chat_history")
+            .then((response) => response.json())
+            .then((data) => {
+              const chatMessages = document.getElementById("chat-messages");
+              chatMessages.innerHTML = "";
+
+              data.forEach((message) => {
+                const userDiv = document.createElement("div");
+                userDiv.className = "user-message";
+                userDiv.textContent = message.user;
+                chatMessages.appendChild(userDiv);
+
+                const assistantDiv = document.createElement("div");
+                assistantDiv.className = "assistant-message";
+                assistantDiv.textContent = message.assistant;
+                chatMessages.appendChild(assistantDiv);
+              });
+
+              // Scroll to bottom
+              chatMessages.scrollTop = chatMessages.scrollHeight;
+            });
+        }
+
+        // Initialize chat history when tab is shown
+        document
+          .querySelector('button[data-bs-target="#chat"]')
+          .addEventListener("click", loadChatHistory);
+
+        // Chat functionality
+        document
+          .getElementById("chatButton")
+          .addEventListener("click", sendChatMessage);
+        document
+          .getElementById("chatInput")
+          .addEventListener("keypress", function (e) {
+            if (e.key === "Enter") {
+              sendChatMessage();
+            }
+          });
+
+        function sendChatMessage() {
+          const message = document.getElementById("chatInput").value.trim();
+          if (!message) {
+            return;
+          }
+
+          // Add user message to the chat
+          const chatMessages = document.getElementById("chat-messages");
+          const userDiv = document.createElement("div");
+          userDiv.className = "user-message";
+          userDiv.textContent = message;
+          chatMessages.appendChild(userDiv);
+
+          // Clear input
+          document.getElementById("chatInput").value = "";
+
+          // Show spinner
+          document.getElementById("chatSpinner").style.display = "block";
+
+          const formData = new FormData();
+          formData.append("message", message);
+
+          fetch("/chat", {
+            method: "POST",
+            body: formData,
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              document.getElementById("chatSpinner").style.display = "none";
+
+              if (data.success) {
+                const assistantDiv = document.createElement("div");
+                assistantDiv.className = "assistant-message";
+                assistantDiv.textContent = data.response;
+                chatMessages.appendChild(assistantDiv);
+
+                // Scroll to bottom
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+              } else {
+                const errorDiv = document.createElement("div");
+                errorDiv.className = "alert alert-danger";
+                errorDiv.textContent = `Error: ${data.message}`;
+                chatMessages.appendChild(errorDiv);
+              }
+            })
+            .catch((error) => {
+              document.getElementById("chatSpinner").style.display = "none";
+
+              const errorDiv = document.createElement("div");
+              errorDiv.className = "alert alert-danger";
+              errorDiv.textContent = `Error: ${error.message}`;
+              chatMessages.appendChild(errorDiv);
+            });
+        }
+      });
+    </script>
+  </body>
+</html>

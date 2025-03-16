@@ -10,3 +10,4 @@ rouge>=1.0.1
 pypdf>=3.12.1
 ctransformers>=0.2.24
 langchain-community
+flask==2.3.3
