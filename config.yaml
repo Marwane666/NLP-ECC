@@ -1,0 +1,33 @@
+# RAG System Configuration
+
+# Data paths
+data_directory: "data"
+vector_db_directory: "vector_db"
+
+# Embedding model settings
+embedding_model:
+  name: "sentence-transformers/all-mpnet-base-v2"
+  kwargs:
+    device: "cpu"
+
+# Text splitter settings
+text_splitter:
+  chunk_size: 1000
+  chunk_overlap: 200
+
+# Retrieval settings
+retrieval:
+  top_k: 5
+
+# LLM settings
+llm:
+  model_path: "TheBloke/Llama-2-7B-Chat-GGML"
+  model_type: "llama"
+  use_gpu: true
+  max_new_tokens: 512
+  temperature: 0.7
+  context_length: 2048
+  gpu_layers: 24  # Set to 0 for CPU-only
+
+# Chat settings
+max_chat_history: 10
