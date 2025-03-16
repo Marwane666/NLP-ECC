@@ -44,11 +44,27 @@
         text-align: center;
         padding: 20px;
       }
+      .env-warning {
+        margin-bottom: 20px;
+        padding: 15px;
+        border-radius: 5px;
+        background-color: #fff3cd;
+        border: 1px solid #ffecb5;
+      }
     </style>
   </head>
   <body>
     <div class="container">
-      <h1 class="text-center mb-4">RAG System</h1>
+      <h1 class="text-center mb-4">RAG System with Azure AI Inference</h1>
+
+      <!-- Environment check warning -->
+      <div id="envWarning" class="env-warning" style="display: none;">
+        <strong>Warning:</strong> Some environment variables are not set properly. The system may not function correctly.
+        <div class="mt-2">
+          <button class="btn btn-sm btn-warning" onclick="checkEnvironment()">Check Environment</button>
+          <a href="/setup_env" class="btn btn-sm btn-primary ms-2">Setup Environment</a>
+        </div>
+      </div>
 
       <ul class="nav nav-tabs" id="myTab" role="tablist">
         <li class="nav-item" role="presentation">
@@ -122,6 +138,7 @@
               <h5 class="card-title">Index Documents</h5>
               <p class="card-text">
                 Index documents in your data directory to make them searchable.
+                Make sure to place your PDF files in the <code>data</code> directory before indexing.
               </p>
               <button id="indexButton" class="btn btn-primary">
                 Start Indexing
@@ -183,6 +200,7 @@
               <h5 class="card-title">Ask Questions</h5>
               <p class="card-text">
                 Get answers to your questions based on the indexed documents.
+                Azure AI Inference will generate responses using retrieved context.
               </p>
               <div class="mb-3">
                 <label for="questionInput" class="form-label"
@@ -246,6 +264,9 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", function () {
+        // Check environment on load
+        checkEnvironment();
+        
         // Index Documents
         document
           .getElementById("indexButton")
@@ -263,11 +284,19 @@
                   document.getElementById("indexResult").innerHTML = `
                             <div class="alert alert-success" role="alert">
                                 ${data.message}
+                            </div>
+                            <div class="mt-3">
+                                <small class="text-muted">Details:</small>
+                                <pre class="mt-2 p-2 bg-light">${data.details || 'No details available'}</pre>
                             </div>`;
                 } else {
                   document.getElementById("indexResult").innerHTML = `
                             <div class="alert alert-danger" role="alert">
                                 Error: ${data.message}
+                            </div>
+                            <div class="mt-3">
+                                <small class="text-muted">Details:</small>
+                                <pre class="mt-2 p-2 bg-light">${data.details || 'No details available'}</pre>
                             </div>`;
                 }
               })
@@ -385,7 +414,8 @@
                   document.getElementById("askResult").innerHTML = `
                             <div class="alert alert-danger" role="alert">
                                 Error: ${data.message}
-                            </div>`;
+                            </div>
+                            ${data.details ? `<pre class="mt-2 p-2 bg-light">${data.details}</pre>` : ''}`;
                 }
               })
               .catch((error) => {
@@ -491,6 +521,36 @@
               errorDiv.className = "alert alert-danger";
               errorDiv.textContent = `Error: ${error.message}`;
               chatMessages.appendChild(errorDiv);
+            });
+        }
+        
+        // Environment check function
+        function checkEnvironment() {
+          fetch("/check_env")
+            .then(response => response.json())
+            .then(data => {
+              if (!data.all_set) {
+                document.getElementById("envWarning").style.display = "block";
+                
+                let missingVars = [];
+                if (!data.github_token) missingVars.push("GITHUB_TOKEN");
+                if (!data.azure_endpoint) missingVars.push("AZURE_INFERENCE_ENDPOINT");
+                if (!data.chat_model) missingVars.push("AZURE_INFERENCE_CHAT_MODEL");
+                if (!data.embedding_model) missingVars.push("AZURE_INFERENCE_EMBEDDING_MODEL");
+                
+                document.getElementById("envWarning").innerHTML = `
+                  <strong>Warning:</strong> Some environment variables are not set properly. The system may not function correctly.
+                  <div class="mt-2">
+                    <p>Missing variables: ${missingVars.join(", ")}</p>
+                    <a href="/setup_env" class="btn btn-sm btn-primary">Setup Environment</a>
+                  </div>
+                `;
+              } else {
+                document.getElementById("envWarning").style.display = "none";
+              }
+            })
+            .catch(error => {
+              console.error("Error checking environment:", error);
             });
         }
       });

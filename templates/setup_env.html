@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Environment Setup - RAG System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 20px;
+            padding-bottom: 50px;
+        }
+        .setup-card {
+            margin-top: 30px;
+            margin-bottom: 30px;
+        }
+        .command-box {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">Environment Setup</h1>
+        
+        <div class="alert alert-warning">
+            <strong>Missing environment variables detected.</strong> Please follow the steps below to set up your environment.
+        </div>
+        
+        <div class="card setup-card">
+            <div class="card-header">
+                <h3>Option 1: Interactive Setup</h3>
+            </div>
+            <div class="card-body">
+                <p>Run the interactive setup script to configure your environment variables:</p>
+                <div class="command-box">
+                    python example_env_setup.py
+                </div>
+                <p>This script will guide you through setting up:</p>
+                <ul>
+                    <li>GitHub token (used as API key)</li>
+                    <li>Azure AI Inference endpoint</li>
+                    <li>Chat model name</li>
+                    <li>Embedding model name</li>
+                </ul>
+                <p>After running the script, restart the web server for the changes to take effect.</p>
+            </div>
+        </div>
+        
+        <div class="card setup-card">
+            <div class="card-header">
+                <h3>Option 2: Manual Setup</h3>
+            </div>
+            <div class="card-body">
+                <p>Create a <code>.env</code> file in the project root with the following content:</p>
+                <div class="command-box">
+                    GITHUB_TOKEN=your_github_token_here<br>
+                    AZURE_INFERENCE_ENDPOINT=https://models.inference.ai.azure.com<br>
+                    AZURE_INFERENCE_CHAT_MODEL=gpt-4o<br>
+                    AZURE_INFERENCE_EMBEDDING_MODEL=text-embedding-3-small
+                </div>
+                <p>After creating the file, load the environment variables by running:</p>
+                <div class="command-box">
+                    python load_env.py
+                </div>
+                <p>Then restart the web server for the changes to take effect.</p>
+            </div>
+        </div>
+        
+        <div class="card setup-card">
+            <div class="card-header">
+                <h3>Option 3: Using the Wrapper Script</h3>
+            </div>
+            <div class="card-body">
+                <p>Set up your environment variables in a <code>.env</code> file and use the wrapper script to run commands:</p>
+                <div class="command-box">
+                    python run.py index<br>
+                    python run.py ask "Your question here"<br>
+                    python run.py chat
+                </div>
+                <p>The wrapper script automatically loads environment variables from the <code>.env</code> file before executing commands.</p>
+            </div>
+        </div>
+        
+        <div class="card setup-card">
+            <div class="card-header">
+                <h3>Option 4: Using a Virtual Environment</h3>
+            </div>
+            <div class="card-body">
+                <p>Create a dedicated virtual environment with all required dependencies:</p>
+                <div class="command-box">
+                    python setup_venv.py
+                </div>
+                <p>This will:</p>
+                <ul>
+                    <li>Create a virtual environment named 'rag_env'</li>
+                    <li>Install all required dependencies</li>
+                    <li>Create activation scripts for your platform</li>
+                </ul>
+                <p>After running the script, activate the virtual environment before running commands:</p>
+                <div class="command-box">
+                    # On Windows<br>
+                    .\activate.bat<br><br>
+                    # On Linux/macOS<br>
+                    source ./activate.sh
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4 text-center">
+            <a href="/" class="btn btn-primary">Back to Home</a>
+            <button onclick="checkEnvironment()" class="btn btn-warning ms-2">Check Environment</button>
+        </div>
+    </div>
+
+    <script>
+        function checkEnvironment() {
+            fetch('/check_env')
+                .then(response => response.json())
+                .then(data => {
+                    let message = '';
+                    if (data.all_set) {
+                        message = 'All environment variables are set correctly! You can now use the system.';
+                        alert(message);
+                        window.location.href = '/';
+                    } else {
+                        let missing = [];
+                        if (!data.github_token) missing.push('GITHUB_TOKEN');
+                        if (!data.azure_endpoint) missing.push('AZURE_INFERENCE_ENDPOINT');
+                        if (!data.chat_model) missing.push('AZURE_INFERENCE_CHAT_MODEL');
+                        if (!data.embedding_model) missing.push('AZURE_INFERENCE_EMBEDDING_MODEL');
+                        
+                        message = 'The following environment variables are still missing: ' + missing.join(', ');
+                        alert(message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking environment:', error);
+                    alert('Error checking environment. Please try again.');
+                });
+        }
+    </script>
+</body>
+</html>
