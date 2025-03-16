@@ -1,13 +1,21 @@
 import yaml
 import os
 from typing import Dict, Any, List
-from langchain.llms import HuggingFacePipeline
 from langchain.chains import LLMChain
-from langchain.llms import CTransformers
-import torch
 
 from src.prompt_template import get_qa_prompt
 from src.query_engine import QueryEngine
+
+# Conditionally import Azure clients
+try:
+    from src.azure_clients import get_azure_chat_openai, get_azure_inference_chat_llm
+except ImportError:
+    # Create placeholder functions to avoid errors when Azure modules are not available
+    def get_azure_chat_openai(config):
+        raise ImportError("Azure OpenAI modules not available. Please install with 'pip install langchain-openai'")
+    
+    def get_azure_inference_chat_llm(config):
+        raise ImportError("Azure AI Inference modules not available. Please install with 'pip install azure-ai-inference'")
 
 class QASystem:
     """Question-answering system that combines retrieval with language model generation."""
@@ -26,27 +34,19 @@ class QASystem:
         # Create LLM chain with prompt template
         self.prompt = get_qa_prompt()
         self.chain = LLMChain(llm=self.llm, prompt=self.prompt)
+        print("QA System initialized successfully with Azure AI Inference LLM")
     
     def _initialize_llm(self):
         """Initialize the language model based on configuration."""
         llm_config = self.config['llm']
         
-        if llm_config.get('use_gpu', False) and torch.cuda.is_available():
-            device = 'cuda'
-        else:
-            device = 'cpu'
+        # Always use Azure AI Inference
+        print("Initializing Azure AI Inference LLM...")
+        self.llm = get_azure_inference_chat_llm(llm_config)
         
-        # Using CTransformers for local inference with GGML models
-        self.llm = CTransformers(
-            model=llm_config['model_path'],
-            model_type=llm_config['model_type'],
-            config={
-                'max_new_tokens': llm_config.get('max_new_tokens', 512),
-                'temperature': llm_config.get('temperature', 0.7),
-                'context_length': llm_config.get('context_length', 2048),
-                'gpu_layers': llm_config.get('gpu_layers', 0) if device == 'cuda' else 0
-            }
-        )
+        # Verify the LLM was initialized
+        if not self.llm:
+            raise ValueError("Azure AI Inference LLM initialization failed")
     
     def _prepare_context(self, query: str) -> str:
         """Retrieve relevant documents and prepare context for the LLM."""
@@ -72,14 +72,25 @@ class QASystem:
         Returns:
             Dictionary containing the response and additional information
         """
-        # Prepare context from relevant documents
-        context = self._prepare_context(query)
-        
-        # Generate response using the LLM
-        response = self.chain.run(context=context, query=query)
-        
-        return {
-            'query': query,
-            'response': response,
-            'context_used': context
-        }
+        try:
+            # Prepare context from relevant documents
+            context = self._prepare_context(query)
+            print(f"Retrieved context of length: {len(context)}")
+            
+            # Generate response using the LLM
+            print(f"Generating response to query: {query}")
+            response = self.chain.run(context=context, query=query)
+            print("Response generated successfully")
+            
+            return {
+                'query': query,
+                'response': response,
+                'context_used': context
+            }
+        except Exception as e:
+            print(f"Error generating response: {str(e)}")
+            return {
+                'query': query,
+                'response': f"I encountered an error: {str(e)}. Please try again.",
+                'context_used': "Error retrieving context"
+            }

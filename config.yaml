@@ -6,7 +6,8 @@ vector_db_directory: "vector_db"
 
 # Embedding model settings
 embedding_model:
-  name: "sentence-transformers/all-mpnet-base-v2"
+  type: "huggingface"  # Use HuggingFace for vector store compatibility
+  name: "sentence-transformers/all-mpnet-base-v2"  # 768-dim embeddings
   kwargs:
     device: "cpu"
 
@@ -19,15 +20,15 @@ text_splitter:
 retrieval:
   top_k: 5
 
-# LLM settings
+# LLM settings - using Azure AI Inference exclusively
 llm:
-  model_path: "TheBloke/Llama-2-7B-Chat-GGML"
-  model_type: "llama"
-  use_gpu: true
-  max_new_tokens: 512
+  type: "azure_inference"
+  endpoint: "https://models.inference.ai.azure.com"  # Will use env var if this is empty
+  model_name: "gpt-4o"  # Will use env var if this is empty
   temperature: 0.7
-  context_length: 2048
-  gpu_layers: 24  # Set to 0 for CPU-only
+  max_tokens: 1000
+  top_p: 1.0
+  system_message: "You are a helpful assistant that provides accurate, factual information based on the provided context."
 
 # Chat settings
 max_chat_history: 10

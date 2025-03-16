@@ -1,7 +1,42 @@
 import yaml
+import warnings
 from typing import List, Dict, Any, Tuple
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
+
+# Use updated imports to fix deprecation warnings
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+    HUGGINGFACE_AVAILABLE = True
+except ImportError:
+    from langchain_community.embeddings import HuggingFaceEmbeddings
+    HUGGINGFACE_AVAILABLE = False
+    warnings.warn(
+        "Using deprecated HuggingFaceEmbeddings from langchain_community. "
+        "Install langchain-huggingface for the updated version."
+    )
+
+try:
+    from langchain_chroma import Chroma
+    CHROMA_AVAILABLE = True
+except ImportError:
+    from langchain_community.vectorstores import Chroma
+    CHROMA_AVAILABLE = False
+    warnings.warn(
+        "Using deprecated Chroma from langchain_community. "
+        "Install langchain-chroma for the updated version."
+    )
+
+# Conditionally import Azure clients
+try:
+    from src.azure_clients import AzureOpenAIEmbeddings, AzureInferenceEmbeddings
+except ImportError:
+    # Create placeholder classes to avoid errors when Azure modules are not available
+    class AzureOpenAIEmbeddings:
+        def __init__(self, **kwargs):
+            raise ImportError("Azure OpenAI modules not available. Please install with 'pip install langchain-openai'")
+    
+    class AzureInferenceEmbeddings:
+        def __init__(self, **kwargs):
+            raise ImportError("Azure AI Inference modules not available. Please install with 'pip install azure-ai-inference'")
 
 class QueryEngine:
     """Handles querying the vector store for relevant documents."""
@@ -15,16 +50,40 @@ class QueryEngine:
         self.k = self.config['retrieval']['top_k']
         
         # Initialize embedding model
-        self.embedding_model = HuggingFaceEmbeddings(
-            model_name=self.config['embedding_model']['name'],
-            model_kwargs=self.config['embedding_model'].get('kwargs', {})
-        )
+        self._initialize_embedding_model()
         
         # Load vector store
         self.vector_store = Chroma(
             persist_directory=self.db_dir,
             embedding_function=self.embedding_model
         )
+    
+    def _initialize_embedding_model(self):
+        """Initialize the embedding model based on configuration."""
+        embedding_config = self.config['embedding_model']
+        
+        # Check embedding model type
+        embedding_type = embedding_config.get('type', 'huggingface')
+        
+        if embedding_type == 'azure_inference':
+            # Use Azure AI Inference SDK embeddings
+            self.embedding_model = AzureInferenceEmbeddings(
+                endpoint=embedding_config.get('endpoint'),
+                model_name=embedding_config.get('model_name')
+            )
+        elif embedding_type == 'azure_openai':
+            # Use Azure OpenAI embeddings
+            self.embedding_model = AzureOpenAIEmbeddings(
+                azure_endpoint=embedding_config.get('azure_endpoint'),
+                azure_deployment=embedding_config.get('azure_deployment'),
+                api_version=embedding_config.get('api_version', '2023-05-15')
+            )
+        else:
+            # Default to HuggingFace embeddings
+            self.embedding_model = HuggingFaceEmbeddings(
+                model_name=embedding_config['name'],
+                model_kwargs=embedding_config.get('kwargs', {})
+            )
     
     def query_vector_store(self, query: str) -> List[Tuple[Any, float]]:
         """

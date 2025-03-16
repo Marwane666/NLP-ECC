@@ -3,7 +3,21 @@ import yaml
 import os
 import json
 from typing import List, Dict, Any
+import sys
 
+# Check for required environment variables at startup
+def check_env_vars():
+    """Check for required environment variables and provide guidance if missing."""
+    if os.environ.get('GITHUB_TOKEN') is None:
+        print("ERROR: GITHUB_TOKEN environment variable is not set.")
+        print("Please run one of the following:")
+        print("  1. python example_env_setup.py   # to set up all variables interactively")
+        print("  2. python load_env.py            # to load variables from .env file")
+        print("  3. python run.py <command>       # to run a command with automatic env loading")
+        return False
+    return True
+
+# Import project modules after environment check
 from src.document_indexer import DocumentIndexer
 from src.query_engine import QueryEngine
 from src.qa_system import QASystem
@@ -84,6 +98,10 @@ def start_chat(config_path: str) -> None:
 
 def main():
     """Main function to handle CLI arguments and execute commands."""
+    # Check environment variables first
+    if not check_env_vars():
+        sys.exit(1)
+        
     parser = argparse.ArgumentParser(description='RAG System CLI')
     parser.add_argument('--config', type=str, default='config.yaml', help='Path to config file')
     
