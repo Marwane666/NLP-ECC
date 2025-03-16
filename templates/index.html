@@ -8,6 +8,43 @@
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css"
       rel="stylesheet"
     />
+    <!-- Add Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Include MathJax with full configuration -->
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [
+            ["$", "$"],
+            ["\\(", "\\)"],
+          ],
+          displayMath: [
+            ["$$", "$$"],
+            ["\\[", "\\]"],
+          ],
+          packages: ["base", "ams", "noerrors", "noundefined"],
+          processEscapes: true,
+          processEnvironments: true,
+        },
+        options: {
+          enableMenu: false,
+          processHtmlClass: "tex2jax_process",
+          ignoreHtmlClass: "no-mathjax",
+        },
+        startup: {
+          ready: function () {
+            MathJax.startup.defaultReady();
+          },
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+
     <style>
       body {
         padding-top: 20px;
@@ -39,6 +76,34 @@
         margin-bottom: 10px;
         max-width: 75%;
       }
+      /* Add styling for rendered content */
+      .assistant-message .rendered-content {
+        overflow-x: auto;
+      }
+      .assistant-message .rendered-content pre {
+        background-color: #f1f1f1;
+        padding: 10px;
+        border-radius: 5px;
+        overflow-x: auto;
+      }
+      .assistant-message .rendered-content code {
+        background-color: #f1f1f1;
+        padding: 2px 4px;
+        border-radius: 3px;
+      }
+      .assistant-message .rendered-content table {
+        border-collapse: collapse;
+        margin: 10px 0;
+        width: 100%;
+      }
+      .assistant-message .rendered-content th,
+      .assistant-message .rendered-content td {
+        border: 1px solid #ddd;
+        padding: 8px;
+      }
+      .assistant-message .rendered-content th {
+        background-color: #f2f2f2;
+      }
       .spinner-container {
         display: none;
         text-align: center;
@@ -51,6 +116,67 @@
         background-color: #fff3cd;
         border: 1px solid #ffecb5;
       }
+      /* File upload styling */
+      .file-upload-container {
+        border: 2px dashed #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        margin-bottom: 20px;
+        background-color: #f8f9fa;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+      .file-upload-container:hover {
+        border-color: #007bff;
+        background-color: #f1f8ff;
+      }
+      .file-upload-container input {
+        display: none;
+      }
+      .indexing-options {
+        margin-bottom: 20px;
+      }
+      /* File list styling */
+      .file-list {
+        margin-top: 20px;
+      }
+      .file-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 15px;
+        margin-bottom: 8px;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        border: 1px solid #dee2e6;
+      }
+      .file-item:hover {
+        background-color: #e9ecef;
+      }
+      .file-item .file-type-badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+        margin-right: 10px;
+      }
+      .file-item .file-chunks {
+        color: #6c757d;
+        font-size: 14px;
+      }
+      .file-item .delete-file {
+        color: #dc3545;
+        cursor: pointer;
+        padding: 5px 10px;
+      }
+      .file-item .delete-file:hover {
+        color: #c82333;
+      }
+      .tab-separator {
+        margin: 20px 0;
+        border-top: 1px solid #dee2e6;
+      }
     </style>
   </head>
   <body>
@@ -58,11 +184,16 @@
       <h1 class="text-center mb-4">RAG System with Azure AI Inference</h1>
 
       <!-- Environment check warning -->
-      <div id="envWarning" class="env-warning" style="display: none;">
-        <strong>Warning:</strong> Some environment variables are not set properly. The system may not function correctly.
+      <div id="envWarning" class="env-warning" style="display: none">
+        <strong>Warning:</strong> Some environment variables are not set
+        properly. The system may not function correctly.
         <div class="mt-2">
-          <button class="btn btn-sm btn-warning" onclick="checkEnvironment()">Check Environment</button>
-          <a href="/setup_env" class="btn btn-sm btn-primary ms-2">Setup Environment</a>
+          <button class="btn btn-sm btn-warning" onclick="checkEnvironment()">
+            Check Environment
+          </button>
+          <a href="/setup_env" class="btn btn-sm btn-primary ms-2"
+            >Setup Environment</a
+          >
         </div>
       </div>
 
@@ -123,6 +254,20 @@
             Chat
           </button>
         </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            id="config-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#config"
+            type="button"
+            role="tab"
+            aria-controls="config"
+            aria-selected="false"
+          >
+            Configuration
+          </button>
+        </li>
       </ul>
 
       <div class="tab-content" id="myTabContent">
@@ -137,19 +282,63 @@
             <div class="card-body">
               <h5 class="card-title">Index Documents</h5>
               <p class="card-text">
-                Index documents in your data directory to make them searchable.
-                Make sure to place your PDF files in the <code>data</code> directory before indexing.
+                Index documents to make them searchable. You can upload new
+                files or process existing ones in the data directory.
               </p>
-              <button id="indexButton" class="btn btn-primary">
-                Start Indexing
-              </button>
+
+              <!-- File Upload Section -->
+              <div class="file-upload-container" id="fileUploadContainer">
+                <input
+                  type="file"
+                  id="fileUpload"
+                  accept=".pdf,.txt,.docx,.doc,.csv,.md"
+                />
+                <div>
+                  <i class="bi bi-cloud-upload"></i>
+                  <h5>Drag & Drop Files Here</h5>
+                  <p>Or click to select files</p>
+                  <p class="text-muted small">
+                    Supported formats: PDF, TXT, DOCX, CSV, MD
+                  </p>
+                </div>
+              </div>
+
+              <!-- Indexing Options -->
+              <div class="indexing-options">
+                <div class="form-check mb-2">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="resetDbCheckbox"
+                  />
+                  <label class="form-check-label" for="resetDbCheckbox">
+                    Reset vector database before indexing
+                  </label>
+                </div>
+                <button id="indexButton" class="btn btn-primary">
+                  Index All Documents
+                </button>
+                <button id="uploadIndexButton" class="btn btn-success ms-2">
+                  Upload & Index Selected File
+                </button>
+              </div>
+
               <div class="spinner-container" id="indexSpinner">
                 <div class="spinner-border text-primary" role="status">
                   <span class="visually-hidden">Loading...</span>
                 </div>
-                <p>Indexing documents... This might take a while.</p>
+                <p>Processing documents... This might take a while.</p>
               </div>
               <div id="indexResult" class="mt-3"></div>
+
+              <!-- Horizontal separator -->
+              <div class="tab-separator"></div>
+
+              <!-- Indexed Files Section -->
+              <h5>Indexed Documents</h5>
+              <div id="indexedFilesContainer">
+                <p>Loading indexed files...</p>
+              </div>
             </div>
           </div>
         </div>
@@ -200,7 +389,8 @@
               <h5 class="card-title">Ask Questions</h5>
               <p class="card-text">
                 Get answers to your questions based on the indexed documents.
-                Azure AI Inference will generate responses using retrieved context.
+                Azure AI Inference will generate responses using retrieved
+                context.
               </p>
               <div class="mb-3">
                 <label for="questionInput" class="form-label"
@@ -258,56 +448,455 @@
             </div>
           </div>
         </div>
+
+        <!-- Config Tab -->
+        <div
+          class="tab-pane fade"
+          id="config"
+          role="tabpanel"
+          aria-labelledby="config-tab"
+        >
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Configuration</h5>
+              <p class="card-text">View and manage the system configuration.</p>
+              <a href="/config" class="btn btn-primary" target="_blank">
+                View Full Configuration
+              </a>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", function () {
+        // Configure marked options with correct settings for HTML
+        marked.setOptions({
+          breaks: true,
+          gfm: true,
+          sanitize: false,
+          smartypants: true,
+        });
+
+        // Significantly improved LaTeX preprocessing
+        function preprocessLatex(text) {
+          let processed = text;
+
+          // First, protect all properly formatted LaTeX
+          // Find all instances of $$...$$ and \[...\] and give them a unique marker
+          let protectedBlocks = [];
+          processed = processed.replace(
+            /(\$\$[\s\S]+?\$\$)|(\\\[[\s\S]+?\\\])/g,
+            function (match) {
+              const id = protectedBlocks.length;
+              protectedBlocks.push(match);
+              return `%%PROTECTED_BLOCK_${id}%%`;
+            }
+          );
+
+          // Same for inline math $...$ and \(...\)
+          processed = processed.replace(
+            /(\$[^\$]+?\$)|(\\\([^\)]+?\\\))/g,
+            function (match) {
+              const id = protectedBlocks.length;
+              protectedBlocks.push(match);
+              return `%%PROTECTED_BLOCK_${id}%%`;
+            }
+          );
+
+          // Handle broken multi-line LaTeX blocks - finds lines ending with \ that might be part of a cases environment
+          processed = processed.replace(
+            /(\$\$[\s\S]*?\\\\)(\s*[\s\S]*?\$\$)/g,
+            function (match, p1, p2) {
+              const id = protectedBlocks.length;
+              protectedBlocks.push(match);
+              return `%%PROTECTED_BLOCK_${id}%%`;
+            }
+          );
+
+          // Now handle the raw LaTeX notations that aren't properly formatted
+          // Convert (formula) to \(formula\) if it looks like LaTeX
+          processed = processed.replace(/\(([^)]+)\)/g, function (match, p1) {
+            // Only convert if it looks like LaTeX
+            if (
+              p1.includes("\\") ||
+              p1.includes("_") ||
+              p1.includes("^") ||
+              p1.includes("{") ||
+              p1.includes("}") ||
+              p1.includes("frac") ||
+              p1.includes("sqrt") ||
+              p1.includes("text")
+            ) {
+              return "\\(" + p1 + "\\)";
+            }
+            return match;
+          });
+
+          // Convert [formula] to $$formula$$ if it looks like display math
+          processed = processed.replace(/\[([^\]]+)\]/g, function (match, p1) {
+            // More comprehensive check for LaTeX content
+            if (
+              p1.includes("\\") ||
+              p1.includes("_") ||
+              p1.includes("^") ||
+              p1.includes("{") ||
+              p1.includes("}") ||
+              p1.includes("frac") ||
+              p1.includes("sqrt") ||
+              p1.includes("text") ||
+              p1.includes("begin") ||
+              p1.includes("end") ||
+              p1.includes("cases") ||
+              p1.includes("align")
+            ) {
+              return "$$" + p1 + "$$";
+            }
+            return match;
+          });
+
+          // Fix common LaTeX environment issues
+          processed = processed.replace(
+            /begin\{cases\}([\s\S]*?)\\end\{cases\}/g,
+            function (match, p1) {
+              // Make sure there are double backslashes at line ends
+              return (
+                "\\begin{cases}" +
+                p1.replace(/\n/g, " \\\\ ").replace(/\\\\ \\\\/g, "\\\\") +
+                "\\end{cases}"
+              );
+            }
+          );
+
+          // Restore the protected blocks
+          for (let i = 0; i < protectedBlocks.length; i++) {
+            processed = processed.replace(
+              `%%PROTECTED_BLOCK_${i}%%`,
+              protectedBlocks[i]
+            );
+          }
+
+          return processed;
+        }
+
         // Check environment on load
         checkEnvironment();
-        
-        // Index Documents
+
+        // Load indexed files on page load
+        loadIndexedFiles();
+
+        // Setup file upload container event handlers
+        const fileUploadContainer = document.getElementById(
+          "fileUploadContainer"
+        );
+        const fileUploadInput = document.getElementById("fileUpload");
+
+        fileUploadContainer.addEventListener("click", function () {
+          fileUploadInput.click();
+        });
+
+        fileUploadContainer.addEventListener("dragover", function (e) {
+          e.preventDefault();
+          fileUploadContainer.style.borderColor = "#007bff";
+          fileUploadContainer.style.backgroundColor = "#f1f8ff";
+        });
+
+        fileUploadContainer.addEventListener("dragleave", function (e) {
+          e.preventDefault();
+          fileUploadContainer.style.borderColor = "#ddd";
+          fileUploadContainer.style.backgroundColor = "#f8f9fa";
+        });
+
+        fileUploadContainer.addEventListener("drop", function (e) {
+          e.preventDefault();
+          fileUploadContainer.style.borderColor = "#ddd";
+          fileUploadContainer.style.backgroundColor = "#f8f9fa";
+
+          if (e.dataTransfer.files.length) {
+            fileUploadInput.files = e.dataTransfer.files;
+            const fileName = e.dataTransfer.files[0].name;
+            updateFileUploadDisplay(fileName);
+          }
+        });
+
+        fileUploadInput.addEventListener("change", function () {
+          if (fileUploadInput.files.length) {
+            const fileName = fileUploadInput.files[0].name;
+            updateFileUploadDisplay(fileName);
+          }
+        });
+
+        function updateFileUploadDisplay(fileName) {
+          const displayDiv = fileUploadContainer.querySelector("div");
+          displayDiv.innerHTML = `
+            <h5>Selected File: ${fileName}</h5>
+            <p>Click "Upload & Index" to process this file</p>
+            <p><a href="#" id="clearFileSelection" class="text-danger">Clear selection</a></p>
+          `;
+
+          document
+            .getElementById("clearFileSelection")
+            .addEventListener("click", function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              fileUploadInput.value = "";
+              displayDiv.innerHTML = `
+              <i class="bi bi-cloud-upload"></i>
+              <h5>Drag & Drop Files Here</h5>
+              <p>Or click to select files</p>
+              <p class="text-muted small">Supported formats: PDF, TXT, DOCX, CSV, MD</p>
+            `;
+            });
+        }
+
+        // Index All Documents
         document
           .getElementById("indexButton")
           .addEventListener("click", function () {
+            const resetDb = document.getElementById("resetDbCheckbox").checked;
             document.getElementById("indexSpinner").style.display = "block";
             document.getElementById("indexResult").innerHTML = "";
 
+            const formData = new FormData();
+            formData.append("reset_db", resetDb);
+
             fetch("/index_documents", {
               method: "POST",
+              body: formData,
             })
               .then((response) => response.json())
               .then((data) => {
                 document.getElementById("indexSpinner").style.display = "none";
                 if (data.success) {
                   document.getElementById("indexResult").innerHTML = `
-                            <div class="alert alert-success" role="alert">
-                                ${data.message}
-                            </div>
-                            <div class="mt-3">
-                                <small class="text-muted">Details:</small>
-                                <pre class="mt-2 p-2 bg-light">${data.details || 'No details available'}</pre>
-                            </div>`;
+                    <div class="alert alert-success" role="alert">
+                      ${data.message}
+                    </div>
+                    <div class="mt-3">
+                      <small class="text-muted">Details:</small>
+                      <pre class="mt-2 p-2 bg-light">${
+                        data.details || "No details available"
+                      }</pre>
+                    </div>`;
+
+                  // Refresh the file list
+                  loadIndexedFiles();
                 } else {
                   document.getElementById("indexResult").innerHTML = `
-                            <div class="alert alert-danger" role="alert">
-                                Error: ${data.message}
-                            </div>
-                            <div class="mt-3">
-                                <small class="text-muted">Details:</small>
-                                <pre class="mt-2 p-2 bg-light">${data.details || 'No details available'}</pre>
-                            </div>`;
+                    <div class="alert alert-danger" role="alert">
+                      Error: ${data.message}
+                    </div>
+                    <div class="mt-3">
+                      <small class="text-muted">Details:</small>
+                      <pre class="mt-2 p-2 bg-light">${
+                        data.details || "No details available"
+                      }</pre>
+                    </div>`;
                 }
               })
               .catch((error) => {
                 document.getElementById("indexSpinner").style.display = "none";
                 document.getElementById("indexResult").innerHTML = `
-                        <div class="alert alert-danger" role="alert">
-                            Error: ${error.message}
-                        </div>`;
+                  <div class="alert alert-danger" role="alert">
+                    Error: ${error.message}
+                  </div>`;
               });
           });
+
+        // Upload & Index Selected File
+        document
+          .getElementById("uploadIndexButton")
+          .addEventListener("click", function () {
+            const fileInput = document.getElementById("fileUpload");
+            if (!fileInput.files || fileInput.files.length === 0) {
+              document.getElementById("indexResult").innerHTML = `
+                <div class="alert alert-warning" role="alert">
+                  Please select a file to upload.
+                </div>`;
+              return;
+            }
+
+            const resetDb = document.getElementById("resetDbCheckbox").checked;
+            document.getElementById("indexSpinner").style.display = "block";
+            document.getElementById("indexResult").innerHTML = "";
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+            formData.append("reset_db", resetDb);
+
+            fetch("/index_documents", {
+              method: "POST",
+              body: formData,
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                document.getElementById("indexSpinner").style.display = "none";
+                if (data.success) {
+                  document.getElementById("indexResult").innerHTML = `
+                    <div class="alert alert-success" role="alert">
+                      ${data.message}
+                    </div>
+                    <div class="mt-3">
+                      <small class="text-muted">Details:</small>
+                      <pre class="mt-2 p-2 bg-light">${
+                        data.details || "No details available"
+                      }</pre>
+                    </div>`;
+
+                  // Reset file input
+                  fileInput.value = "";
+                  fileUploadContainer.querySelector("div").innerHTML = `
+                    <i class="bi bi-cloud-upload"></i>
+                    <h5>Drag & Drop Files Here</h5>
+                    <p>Or click to select files</p>
+                    <p class="text-muted small">Supported formats: PDF, TXT, DOCX, CSV, MD</p>
+                  `;
+
+                  // Refresh the file list
+                  loadIndexedFiles();
+                } else {
+                  document.getElementById("indexResult").innerHTML = `
+                    <div class="alert alert-danger" role="alert">
+                      Error: ${data.message}
+                    </div>
+                    <div class="mt-3">
+                      <small class="text-muted">Details:</small>
+                      <pre class="mt-2 p-2 bg-light">${
+                        data.details || "No details available"
+                      }</pre>
+                    </div>`;
+                }
+              })
+              .catch((error) => {
+                document.getElementById("indexSpinner").style.display = "none";
+                document.getElementById("indexResult").innerHTML = `
+                  <div class="alert alert-danger" role="alert">
+                    Error: ${error.message}
+                  </div>`;
+              });
+          });
+
+        // Function to load indexed files
+        function loadIndexedFiles() {
+          const filesContainer = document.getElementById(
+            "indexedFilesContainer"
+          );
+          filesContainer.innerHTML = `
+            <div class="spinner-border text-primary spinner-border-sm" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div> Loading indexed files...`;
+
+          fetch("/list_documents")
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.success && data.files && data.files.length > 0) {
+                let filesHTML = `<div class="file-list">`;
+
+                data.files.forEach((file) => {
+                  // Generate a color based on file type
+                  const fileTypeColors = {
+                    pdf: "bg-danger text-white",
+                    txt: "bg-success text-white",
+                    docx: "bg-primary text-white",
+                    csv: "bg-warning text-dark",
+                    md: "bg-info text-dark",
+                    default: "bg-secondary text-white",
+                  };
+
+                  const colorClass =
+                    fileTypeColors[file.type] || fileTypeColors.default;
+
+                  filesHTML += `
+                    <div class="file-item" data-filename="${file.name}">
+                      <div>
+                        <span class="file-type-badge ${colorClass}">${file.type}</span>
+                        <span>${file.name}</span>
+                        <span class="file-chunks">(${file.chunks} chunks)</span>
+                      </div>
+                      <div>
+                        <button class="btn btn-sm btn-outline-danger delete-file" 
+                                data-filename="${file.name}"
+                                onclick="deleteFile('${file.name}')">
+                          <i class="bi bi-trash"></i> Delete
+                        </button>
+                      </div>
+                    </div>
+                  `;
+                });
+
+                filesHTML += `</div>`;
+                filesContainer.innerHTML = filesHTML;
+              } else {
+                filesContainer.innerHTML = `
+                  <div class="alert alert-info" role="alert">
+                    No indexed files found. Upload or index documents to see them here.
+                  </div>`;
+              }
+            })
+            .catch((error) => {
+              filesContainer.innerHTML = `
+                <div class="alert alert-danger" role="alert">
+                  Error loading indexed files: ${error.message}
+                </div>`;
+            });
+        }
+
+        // Make deleteFile function available globally
+        window.deleteFile = function (filename) {
+          if (
+            confirm(
+              `Are you sure you want to delete "${filename}" from the index?`
+            )
+          ) {
+            document.getElementById("indexSpinner").style.display = "block";
+
+            fetch("/delete_document", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ filename: filename }),
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                document.getElementById("indexSpinner").style.display = "none";
+                if (data.success) {
+                  document.getElementById("indexResult").innerHTML = `
+                    <div class="alert alert-success" role="alert">
+                      ${data.message}
+                    </div>`;
+
+                  // Refresh the file list
+                  loadIndexedFiles();
+                } else {
+                  document.getElementById("indexResult").innerHTML = `
+                    <div class="alert alert-danger" role="alert">
+                      Error: ${data.message}
+                    </div>
+                    <div class="mt-3">
+                      <small class="text-muted">Details:</small>
+                      <pre class="mt-2 p-2 bg-light">${
+                        data.details || "No details available"
+                      }</pre>
+                    </div>`;
+                }
+              })
+              .catch((error) => {
+                document.getElementById("indexSpinner").style.display = "none";
+                document.getElementById("indexResult").innerHTML = `
+                  <div class="alert alert-danger" role="alert">
+                    Error: ${error.message}
+                  </div>`;
+              });
+          }
+        };
+
+        // Refresh file list when index tab is shown
+        document
+          .querySelector('button[data-bs-target="#index"]')
+          .addEventListener("click", loadIndexedFiles);
 
         // Query Documents
         document
@@ -401,21 +990,67 @@
               .then((data) => {
                 document.getElementById("askSpinner").style.display = "none";
                 if (data.success) {
-                  document.getElementById("askResult").innerHTML = `
-                            <div class="card mt-3">
-                                <div class="card-header">
-                                    <strong>Question:</strong> ${data.question}
-                                </div>
-                                <div class="card-body">
-                                    <p class="card-text">${data.answer}</p>
-                                </div>
-                            </div>`;
+                  // Create the card container
+                  const cardContainer = document.createElement("div");
+                  cardContainer.className = "card mt-3";
+
+                  // Create the card header
+                  const cardHeader = document.createElement("div");
+                  cardHeader.className = "card-header";
+                  cardHeader.innerHTML = `<strong>Question:</strong> ${data.question}`;
+
+                  // Create the card body
+                  const cardBody = document.createElement("div");
+                  cardBody.className = "card-body";
+
+                  // Create a div for rendered content with markdown and LaTeX
+                  const renderedContent = document.createElement("div");
+                  renderedContent.className =
+                    "rendered-content tex2jax_process";
+
+                  // Apply the same preprocessing for LaTeX and markdown as in chat
+                  const processedText = preprocessLatex(data.answer);
+
+                  // Process markdown
+                  renderedContent.innerHTML = marked.parse(processedText);
+
+                  // Add rendered content to card body
+                  cardBody.appendChild(renderedContent);
+
+                  // Assemble the card
+                  cardContainer.appendChild(cardHeader);
+                  cardContainer.appendChild(cardBody);
+
+                  // Add to DOM
+                  document
+                    .getElementById("askResult")
+                    .appendChild(cardContainer);
+
+                  // Render LaTeX with MathJax
+                  if (
+                    window.MathJax &&
+                    typeof window.MathJax.typesetPromise === "function"
+                  ) {
+                    try {
+                      window.MathJax.typesetPromise([renderedContent]).catch(
+                        function (err) {
+                          console.log("MathJax error:", err);
+                        }
+                      );
+                    } catch (error) {
+                      console.error("Error rendering math:", error);
+                    }
+                  }
                 } else {
                   document.getElementById("askResult").innerHTML = `
                             <div class="alert alert-danger" role="alert">
                                 Error: ${data.message}
                             </div>
-                            ${data.details ? `<pre class="mt-2 p-2 bg-light">${data.details}</pre>` : ''}`;
+                            ${
+                              data.details
+                                ? `<pre class="mt-2 p-2 bg-light">${data.details}</pre>`
+                                : ""
+                            }`;
                 }
               })
               .catch((error) => {
@@ -427,7 +1062,7 @@
               });
           });
 
-        // Load chat history
+        // Load chat history with improved rendering
         function loadChatHistory() {
           fetch("/chat_history")
             .then((response) => response.json())
@@ -443,8 +1078,34 @@
 
                 const assistantDiv = document.createElement("div");
                 assistantDiv.className = "assistant-message";
-                assistantDiv.textContent = message.assistant;
+
+                // Create a div for rendered content
+                const renderedContent = document.createElement("div");
+                renderedContent.className = "rendered-content tex2jax_process";
+
+                // Enhanced preprocessing for all LaTeX formats
+                const processedText = preprocessLatex(message.assistant);
+
+                // Process markdown
+                renderedContent.innerHTML = marked.parse(processedText);
+                assistantDiv.appendChild(renderedContent);
                 chatMessages.appendChild(assistantDiv);
+
+                // Render LaTeX with MathJax
+                if (
+                  window.MathJax &&
+                  typeof window.MathJax.typesetPromise === "function"
+                ) {
+                  try {
+                    window.MathJax.typesetPromise([renderedContent]).catch(
+                      function (err) {
+                        console.log("MathJax error:", err);
+                      }
+                    );
+                  } catch (error) {
+                    console.error("Error rendering math:", error);
+                  }
+                }
               });
 
               // Scroll to bottom
@@ -502,8 +1163,34 @@
               if (data.success) {
                 const assistantDiv = document.createElement("div");
                 assistantDiv.className = "assistant-message";
-                assistantDiv.textContent = data.response;
+
+                // Create a div for rendered content
+                const renderedContent = document.createElement("div");
+                renderedContent.className = "rendered-content tex2jax_process";
+
+                // Enhanced preprocessing for all LaTeX formats
+                const processedText = preprocessLatex(data.response);
+
+                // Process markdown
+                renderedContent.innerHTML = marked.parse(processedText);
+                assistantDiv.appendChild(renderedContent);
                 chatMessages.appendChild(assistantDiv);
+
+                // Render LaTeX with MathJax
+                if (
+                  window.MathJax &&
+                  typeof window.MathJax.typesetPromise === "function"
+                ) {
+                  try {
+                    window.MathJax.typesetPromise([renderedContent]).catch(
+                      function (err) {
+                        console.log("MathJax error:", err);
+                      }
+                    );
+                  } catch (error) {
+                    console.error("Error rendering math:", error);
+                  }
+                }
 
                 // Scroll to bottom
                 chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -523,21 +1210,24 @@
               chatMessages.appendChild(errorDiv);
             });
         }
-        
+
         // Environment check function
         function checkEnvironment() {
           fetch("/check_env")
-            .then(response => response.json())
-            .then(data => {
+            .then((response) => response.json())
+            .then((data) => {
               if (!data.all_set) {
                 document.getElementById("envWarning").style.display = "block";
-                
+
                 let missingVars = [];
                 if (!data.github_token) missingVars.push("GITHUB_TOKEN");
-                if (!data.azure_endpoint) missingVars.push("AZURE_INFERENCE_ENDPOINT");
-                if (!data.chat_model) missingVars.push("AZURE_INFERENCE_CHAT_MODEL");
-                if (!data.embedding_model) missingVars.push("AZURE_INFERENCE_EMBEDDING_MODEL");
-                
+                if (!data.azure_endpoint)
+                  missingVars.push("AZURE_INFERENCE_ENDPOINT");
+                if (!data.chat_model)
+                  missingVars.push("AZURE_INFERENCE_CHAT_MODEL");
+                if (!data.embedding_model)
+                  missingVars.push("AZURE_INFERENCE_EMBEDDING_MODEL");
+
                 document.getElementById("envWarning").innerHTML = `
                   <strong>Warning:</strong> Some environment variables are not set properly. The system may not function correctly.
                   <div class="mt-2">
@@ -549,7 +1239,7 @@
                 document.getElementById("envWarning").style.display = "none";
               }
             })
-            .catch(error => {
+            .catch((error) => {
               console.error("Error checking environment:", error);
             });
         }

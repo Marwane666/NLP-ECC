@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG System Configuration</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .config-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+        }
+        .config-section h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .nested-item {
+            padding-left: 20px;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .file-processor {
+            background-color: #e9f7ef;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .form-floating {
+            margin-bottom: 15px;
+        }
+        .form-buttons {
+            position: sticky;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 15px 0;
+            border-top: 1px solid #dee2e6;
+            margin-top: 20px;
+            z-index: 100;
+        }
+        .text-area-lg {
+            min-height: 120px !important;
+        }
+        .tip {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        .path-input {
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5 mb-5">
+        <h1 class="mb-4">RAG System Configuration</h1>
+        
+        <div class="mb-4">
+            <a href="/" class="btn btn-secondary">Back to Home</a>
+            <button type="button" class="btn btn-success ms-2" onclick="restoreDefaults()">Restore Defaults</button>
+            <button type="button" class="btn btn-danger ms-2" onclick="resetForm()">Reset Changes</button>
+        </div>
+        
+        <div id="saveAlert" class="alert alert-success alert-dismissible fade" role="alert">
+            <span id="alertMessage">Configuration saved successfully!</span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+
+        <form id="configForm">
+            <div class="config-section">
+                <h3>Data Paths</h3>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="text" class="form-control path-input" id="data_directory" name="data_directory" value="{{ config.data_directory }}">
+                            <label for="data_directory">Data Directory</label>
+                            <div class="tip">Directory where document files are stored</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="text" class="form-control path-input" id="vector_db_directory" name="vector_db_directory" value="{{ config.vector_db_directory }}">
+                            <label for="vector_db_directory">Vector DB Directory</label>
+                            <div class="tip">Directory where vector database is stored</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h3>Embedding Model</h3>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-floating">
+                            <select class="form-select" id="embedding_model_type" name="embedding_model.type">
+                                <option value="huggingface" {% if config.embedding_model.type == 'huggingface' %}selected{% endif %}>HuggingFace</option>
+                                <option value="azure_openai" {% if config.embedding_model.type == 'azure_openai' %}selected{% endif %}>Azure OpenAI</option>
+                                <option value="azure_inference" {% if config.embedding_model.type == 'azure_inference' %}selected{% endif %}>Azure AI Inference</option>
+                            </select>
+                            <label for="embedding_model_type">Type</label>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="form-floating">
+                            <input type="text" class="form-control" id="embedding_model_name" name="embedding_model.name" value="{{ config.embedding_model.name }}">
+                            <label for="embedding_model_name">Model Name</label>
+                            <div class="tip">For HuggingFace, use model ID like "sentence-transformers/all-mpnet-base-v2"</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="form-label">Model Arguments (for HuggingFace):</label>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-floating">
+                                <select class="form-select" id="embedding_model_device" name="embedding_model.kwargs.device">
+                                    <option value="cpu" {% if config.embedding_model.kwargs.device == 'cpu' %}selected{% endif %}>CPU</option>
+                                    <option value="cuda" {% if config.embedding_model.kwargs.device == 'cuda' %}selected{% endif %}>CUDA (GPU)</option>
+                                </select>
+                                <label for="embedding_model_device">Device</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h3>Text Splitter (Default)</h3>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="number" class="form-control" id="chunk_size" name="text_splitter.chunk_size" value="{{ config.text_splitter.chunk_size }}">
+                            <label for="chunk_size">Chunk Size</label>
+                            <div class="tip">Number of characters per chunk</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="number" class="form-control" id="chunk_overlap" name="text_splitter.chunk_overlap" value="{{ config.text_splitter.chunk_overlap }}">
+                            <label for="chunk_overlap">Chunk Overlap</label>
+                            <div class="tip">Number of overlapping characters between chunks</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h3>File-specific Processing Strategies</h3>
+                <div class="accordion" id="fileProcessorsAccordion">
+                    {% for ext, settings in config.file_processors.items() %}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ ext }}" aria-expanded="false" aria-controls="collapse{{ ext }}">
+                                {{ ext|upper }} Files
+                            </button>
+                        </h2>
+                        <div id="collapse{{ ext }}" class="accordion-collapse collapse" data-bs-parent="#fileProcessorsAccordion">
+                            <div class="accordion-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-floating">
+                                            <select class="form-select" id="{{ ext }}_processor" name="file_processors.{{ ext }}.processor">
+                                                <option value="chunk_semantic" {% if settings.processor == 'chunk_semantic' %}selected{% endif %}>Chunk Semantic</option>
+                                                <option value="summary" {% if settings.processor == 'summary' %}selected{% endif %}>Summary</option>
+                                                <option value="hybrid" {% if settings.processor == 'hybrid' %}selected{% endif %}>Hybrid</option>
+                                                <option value="structured" {% if settings.processor == 'structured' %}selected{% endif %}>Structured</option>
+                                            </select>
+                                            <label for="{{ ext }}_processor">Processor Type</label>
+                                        </div>
+                                    </div>
+                                    
+                                    {% if settings.separator is defined %}
+                                    <div class="col-md-4">
+                                        <div class="form-floating">
+                                            <input type="text" class="form-control" id="{{ ext }}_separator" name="file_processors.{{ ext }}.separator" value="{{ settings.separator }}">
+                                            <label for="{{ ext }}_separator">Separator</label>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                {% if settings.text_splitter is defined %}
+                                <div class="mt-3">
+                                    <h5>Text Splitter Settings</h5>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-floating">
+                                                <input type="number" class="form-control" id="{{ ext }}_chunk_size" name="file_processors.{{ ext }}.text_splitter.chunk_size" value="{{ settings.text_splitter.chunk_size }}">
+                                                <label for="{{ ext }}_chunk_size">Chunk Size</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-floating">
+                                                <input type="number" class="form-control" id="{{ ext }}_chunk_overlap" name="file_processors.{{ ext }}.text_splitter.chunk_overlap" value="{{ settings.text_splitter.chunk_overlap }}">
+                                                <label for="{{ ext }}_chunk_overlap">Chunk Overlap</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="mt-3">
+                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addFileProcessorModal">
+                        Add New File Type
+                    </button>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h3>Parallel Processing</h3>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="parallel_enabled" name="parallel_processing.enabled" {% if config.parallel_processing.enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="parallel_enabled">Enable Parallel Processing</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="number" class="form-control" id="max_workers" name="parallel_processing.max_workers" value="{{ config.parallel_processing.max_workers }}">
+                            <label for="max_workers">Max Workers</label>
+                            <div class="tip">Number of parallel processing threads</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h3>Retrieval Settings</h3>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="number" class="form-control" id="top_k" name="retrieval.top_k" value="{{ config.retrieval.top_k }}">
+                            <label for="top_k">Top K Results</label>
+                            <div class="tip">Number of most relevant document chunks to retrieve</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h3>LLM Settings</h3>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-floating">
+                            <select class="form-select" id="llm_type" name="llm.type">
+                                <option value="azure_inference" {% if config.llm.type == 'azure_inference' %}selected{% endif %}>Azure AI Inference</option>
+                                <option value="azure_openai" {% if config.llm.type == 'azure_openai' %}selected{% endif %}>Azure OpenAI</option>
+                            </select>
+                            <label for="llm_type">Type</label>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="form-floating">
+                            <input type="text" class="form-control" id="llm_model_name" name="llm.model_name" value="{{ config.llm.model_name }}">
+                            <label for="llm_model_name">Model Name</label>
+                            <div class="tip">For Azure AI Inference, use models like "gpt-4o"</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-4">
+                        <div class="form-floating">
+                            <input type="text" class="form-control" id="llm_endpoint" name="llm.endpoint" value="{{ config.llm.endpoint }}">
+                            <label for="llm_endpoint">Endpoint URL</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-floating">
+                            <input type="number" class="form-control" id="llm_temperature" name="llm.temperature" value="{{ config.llm.temperature }}" step="0.1" min="0" max="2">
+                            <label for="llm_temperature">Temperature</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-floating">
+                            <input type="number" class="form-control" id="llm_max_tokens" name="llm.max_tokens" value="{{ config.llm.max_tokens }}">
+                            <label for="llm_max_tokens">Max Tokens</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-floating">
+                            <input type="number" class="form-control" id="llm_top_p" name="llm.top_p" value="{{ config.llm.top_p }}" step="0.1" min="0" max="1">
+                            <label for="llm_top_p">Top P</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="form-floating">
+                            <textarea class="form-control text-area-lg" id="llm_system_message" name="llm.system_message">{{ config.llm.system_message }}</textarea>
+                            <label for="llm_system_message">System Message</label>
+                            <div class="tip">Instructions given to the LLM about its role and behavior</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h3>Chat Settings</h3>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-floating">
+                            <input type="number" class="form-control" id="max_chat_history" name="max_chat_history" value="{{ config.max_chat_history }}">
+                            <label for="max_chat_history">Max Chat History</label>
+                            <div class="tip">Maximum number of messages to keep in chat history</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-buttons">
+                <button type="submit" class="btn btn-primary">Save Configuration</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="window.location.href='/'">Cancel</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Add File Type Modal -->
+    <div class="modal fade" id="addFileProcessorModal" tabindex="-1" aria-labelledby="addFileProcessorModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addFileProcessorModalLabel">Add New File Type</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="newFileExtension" class="form-label">File Extension</label>
+                        <input type="text" class="form-control" id="newFileExtension" placeholder="e.g., json, html, xml">
+                        <div class="form-text">Enter without the leading dot (e.g., "json" not ".json")</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newProcessorType" class="form-label">Processor Type</label>
+                        <select class="form-select" id="newProcessorType">
+                            <option value="chunk_semantic">Chunk Semantic</option>
+                            <option value="summary">Summary</option>
+                            <option value="hybrid">Hybrid</option>
+                            <option value="structured">Structured</option>
+                        </select>
+                    </div>
+                    <div id="newProcessorStructuredOptions" style="display: none;">
+                        <div class="mb-3">
+                            <label for="newSeparator" class="form-label">Separator</label>
+                            <input type="text" class="form-control" id="newSeparator" value=",">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <h6>Text Splitter Settings</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="newChunkSize" class="form-label">Chunk Size</label>
+                                <input type="number" class="form-control" id="newChunkSize" value="1000">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="newChunkOverlap" class="form-label">Chunk Overlap</label>
+                                <input type="number" class="form-control" id="newChunkOverlap" value="200">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="addFileTypeBtn">Add File Type</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Store the original config for reset functionality
+        let originalConfig = {{ config|tojson }};
+        let formChanged = false;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // Show/hide structured processor options based on selection
+            document.getElementById('newProcessorType').addEventListener('change', function() {
+                const structuredOptions = document.getElementById('newProcessorStructuredOptions');
+                if (this.value === 'structured') {
+                    structuredOptions.style.display = 'block';
+                } else {
+                    structuredOptions.style.display = 'none';
+                }
+            });
+            
+            // Track form changes
+            const formInputs = document.querySelectorAll('#configForm input, #configForm select, #configForm textarea');
+            formInputs.forEach(input => {
+                input.addEventListener('change', function() {
+                    formChanged = true;
+                });
+            });
+            
+            // Add new file type handler
+            document.getElementById('addFileTypeBtn').addEventListener('click', function() {
+                const extension = document.getElementById('newFileExtension').value.trim().toLowerCase();
+                const processorType = document.getElementById('newProcessorType').value;
+                const chunkSize = parseInt(document.getElementById('newChunkSize').value);
+                const chunkOverlap = parseInt(document.getElementById('newChunkOverlap').value);
+                const separator = document.getElementById('newSeparator').value;
+                
+                if (!extension) {
+                    alert('Please enter a file extension');
+                    return;
+                }
+                
+                // Check if this extension already exists
+                if (document.getElementById(`collapse${extension}`)) {
+                    alert('This file extension is already configured');
+                    return;
+                }
+                
+                // Create new accordion item for the file processor
+                const accordionItem = createFileProcessorAccordion(extension, processorType, chunkSize, chunkOverlap, separator);
+                document.getElementById('fileProcessorsAccordion').appendChild(accordionItem);
+                
+                // Close the modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('addFileProcessorModal'));
+                modal.hide();
+                
+                // Reset the form
+                document.getElementById('newFileExtension').value = '';
+                document.getElementById('newChunkSize').value = '1000';
+                document.getElementById('newChunkOverlap').value = '200';
+                document.getElementById('newSeparator').value = ',';
+                
+                formChanged = true;
+            });
+            
+            // Form submission handler
+            document.getElementById('configForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Get form data
+                const formData = new FormData(this);
+                
+                // Convert FormData to a nested object structure
+                const config = {};
+                for (let [key, value] of formData.entries()) {
+                    // Handle nested properties (like embedding_model.name)
+                    if (key.includes('.')) {
+                        const parts = key.split('.');
+                        let current = config;
+                        
+                        for (let i = 0; i < parts.length - 1; i++) {
+                            if (!current[parts[i]]) {
+                                current[parts[i]] = {};
+                            }
+                            current = current[parts[i]];
+                        }
+                        
+                        // Convert checkbox values to boolean
+                        if (value === 'on') {
+                            value = true;
+                        } else if (value === 'off') {
+                            value = false;
+                        }
+                        
+                        // Convert numeric values
+                        if (!isNaN(value) && value !== '') {
+                            if (value.includes('.')) {
+                                value = parseFloat(value);
+                            } else {
+                                value = parseInt(value);
+                            }
+                        }
+                        
+                        current[parts[parts.length - 1]] = value;
+                    } else {
+                        // Handle top-level properties
+                        config[key] = value;
+                    }
+                }
+                
+                // Send the config to the server
+                fetch('/update_config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(config)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Show success message
+                        const alertElement = document.getElementById('saveAlert');
+                        alertElement.classList.add('show');
+                        document.getElementById('alertMessage').textContent = data.message;
+                        
+                        // Update the original config
+                        originalConfig = JSON.parse(JSON.stringify(config));
+                        formChanged = false;
+                        
+                        // Hide the alert after 3 seconds
+                        setTimeout(() => {
+                            alertElement.classList.remove('show');
+                        }, 3000);
+                    } else {
+                        // Show error
+                        const alertElement = document.getElementById('saveAlert');
+                        alertElement.classList.remove('alert-success');
+                        alertElement.classList.add('alert-danger', 'show');
+                        document.getElementById('alertMessage').textContent = `Error: ${data.message}`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error saving configuration:', error);
+                    const alertElement = document.getElementById('saveAlert');
+                    alertElement.classList.remove('alert-success');
+                    alertElement.classList.add('alert-danger', 'show');
+                    document.getElementById('alertMessage').textContent = `Error: ${error.message}`;
+                });
+            });
+        });
+        
+        function createFileProcessorAccordion(extension, processorType, chunkSize, chunkOverlap, separator = null) {
+            const item = document.createElement('div');
+            item.className = 'accordion-item';
+            
+            const html = `
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${extension}" aria-expanded="false" aria-controls="collapse${extension}">
+                        ${extension.toUpperCase()} Files
+                    </button>
+                </h2>
+                <div id="collapse${extension}" class="accordion-collapse collapse" data-bs-parent="#fileProcessorsAccordion">
+                    <div class="accordion-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <select class="form-select" id="${extension}_processor" name="file_processors.${extension}.processor">
+                                        <option value="chunk_semantic" ${processorType === 'chunk_semantic' ? 'selected' : ''}>Chunk Semantic</option>
+                                        <option value="summary" ${processorType === 'summary' ? 'selected' : ''}>Summary</option>
+                                        <option value="hybrid" ${processorType === 'hybrid' ? 'selected' : ''}>Hybrid</option>
+                                        <option value="structured" ${processorType === 'structured' ? 'selected' : ''}>Structured</option>
+                                    </select>
+                                    <label for="${extension}_processor">Processor Type</label>
+                                </div>
+                            </div>
+                            
+                            ${processorType === 'structured' ? `
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="${extension}_separator" name="file_processors.${extension}.separator" value="${separator || ','}">
+                                    <label for="${extension}_separator">Separator</label>
+                                </div>
+                            </div>
+                            ` : ''}
+                        </div>
+                        
+                        <div class="mt-3">
+                            <h5>Text Splitter Settings</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <input type="number" class="form-control" id="${extension}_chunk_size" name="file_processors.${extension}.text_splitter.chunk_size" value="${chunkSize}">
+                                        <label for="${extension}_chunk_size">Chunk Size</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <input type="number" class="form-control" id="${extension}_chunk_overlap" name="file_processors.${extension}.text_splitter.chunk_overlap" value="${chunkOverlap}">
+                                        <label for="${extension}_chunk_overlap">Chunk Overlap</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFileProcessor('${extension}')">
+                                Remove ${extension.toUpperCase()} Configuration
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            item.innerHTML = html;
+            return item;
+        }
+        
+        function removeFileProcessor(extension) {
+            if (confirm(`Are you sure you want to remove the configuration for ${extension.toUpperCase()} files?`)) {
+                const item = document.querySelector(`#collapse${extension}`).closest('.accordion-item');
+                item.remove();
+                formChanged = true;
+            }
+        }
+        
+        function restoreDefaults() {
+            if (confirm("Are you sure you want to restore default settings? This will overwrite all your changes.")) {
+                fetch('/restore_config_defaults', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Reload the page to show defaults
+                        window.location.reload();
+                    } else {
+                        alert(`Error: ${data.message}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error restoring defaults:', error);
+                    alert(`Error: ${error.message}`);
+                });
+            }
+        }
+        
+        function resetForm() {
+            if (formChanged && confirm("Are you sure you want to discard your changes?")) {
+                window.location.reload();
+            } else if (!formChanged) {
+                // If no changes, just refresh anyway
+                window.location.reload();
+            }
+        }
+        
+        // Warn before leaving with unsaved changes
+        window.addEventListener('beforeunload', function(e) {
+            if (formChanged) {
+                e.preventDefault();
+                e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+                return e.returnValue;
+            }
+        });
+    </script>
+</body>
+</html>

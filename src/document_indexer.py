@@ -2,9 +2,20 @@ import os
 import yaml
 import shutil
 import warnings
-from typing import List, Dict, Any
-from langchain_community.document_loaders import PyPDFLoader
-from langchain.text_splitter import MarkdownTextSplitter
+import concurrent.futures
+from typing import List, Dict, Any, Optional, Callable
+from langchain_community.document_loaders import (
+    PyPDFLoader, 
+    TextLoader, 
+    UnstructuredWordDocumentLoader,
+    CSVLoader,
+    UnstructuredMarkdownLoader
+)
+from langchain.text_splitter import (
+    MarkdownTextSplitter, 
+    RecursiveCharacterTextSplitter,
+    CharacterTextSplitter
+)
 
 # Use updated imports to fix deprecation warnings
 try:
@@ -42,6 +53,88 @@ except ImportError:
         def __init__(self, **kwargs):
             raise ImportError("Azure AI Inference modules not available. Please install with 'pip install azure-ai-inference'")
 
+class DocumentProcessor:
+    """Base class for document processing strategies"""
+    
+    def __init__(self, text_splitter_config: Dict[str, Any]):
+        """Initialize with text splitter configuration"""
+        self.text_splitter_config = text_splitter_config
+        self._init_text_splitter()
+    
+    def _init_text_splitter(self):
+        """Initialize the text splitter based on configuration"""
+        chunk_size = self.text_splitter_config.get('chunk_size', 1000)
+        chunk_overlap = self.text_splitter_config.get('chunk_overlap', 200)
+        
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap
+        )
+    
+    def process(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process the documents"""
+        return self.text_splitter.split_documents(documents)
+
+class ChunkSemanticProcessor(DocumentProcessor):
+    """Process documents by splitting into semantic chunks"""
+    
+    def process(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Split documents into semantic chunks"""
+        # Default to basic splitting
+        return super().process(documents)
+
+class SummaryProcessor(DocumentProcessor):
+    """Process documents by generating summaries"""
+    
+    def __init__(self, text_splitter_config: Dict[str, Any], llm=None):
+        super().__init__(text_splitter_config)
+        self.llm = llm
+    
+    def process(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Generate summaries for documents"""
+        # First, split documents into manageable chunks
+        chunks = super().process(documents)
+        
+        # For demonstration only - would need actual LLM integration to generate summaries
+        # This would be replaced with actual summary generation using the LLM
+        if self.llm:
+            # This is a placeholder - in a real implementation, we would use the LLM
+            # to generate summaries for each chunk
+            pass
+            
+        return chunks
+
+class HybridProcessor(DocumentProcessor):
+    """Process documents using both chunk-based and summary-based approaches"""
+    
+    def __init__(self, text_splitter_config: Dict[str, Any], llm=None):
+        super().__init__(text_splitter_config)
+        self.llm = llm
+        self.chunk_processor = ChunkSemanticProcessor(text_splitter_config)
+        self.summary_processor = SummaryProcessor(text_splitter_config, llm)
+    
+    def process(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process using both chunk and summary methods"""
+        chunks = self.chunk_processor.process(documents)
+        
+        # In a real implementation, we would generate summaries and add them as additional chunks
+        # with appropriate metadata to distinguish them
+        
+        return chunks
+
+class StructuredProcessor(DocumentProcessor):
+    """Process structured documents like CSV or JSON"""
+    
+    def __init__(self, text_splitter_config: Dict[str, Any], **kwargs):
+        super().__init__(text_splitter_config)
+        self.kwargs = kwargs
+    
+    def process(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process structured documents"""
+        # For structured data, we might want custom processing
+        # For now, we'll use the default text splitter
+        return super().process(documents)
+
 class DocumentIndexer:
     """Handles the pipeline for loading, splitting, embedding, and storing documents."""
     
@@ -72,11 +165,16 @@ class DocumentIndexer:
         # Initialize embedding model
         self._initialize_embedding_model()
         
-        # Initialize text splitter
-        self.text_splitter = MarkdownTextSplitter(
-            chunk_size=self.config['text_splitter']['chunk_size'],
-            chunk_overlap=self.config['text_splitter']['chunk_overlap']
-        )
+        # Initialize default text splitter
+        self.default_text_splitter_config = self.config['text_splitter']
+        
+        # Configure file loaders and processors
+        self._configure_file_handlers()
+        
+        # Initialize parallel processing settings
+        self.parallel_config = self.config.get('parallel_processing', {})
+        self.parallel_enabled = self.parallel_config.get('enabled', False)
+        self.max_workers = self.parallel_config.get('max_workers', 4)
         
     def _initialize_embedding_model(self):
         """Initialize the embedding model based on configuration."""
@@ -108,33 +206,136 @@ class DocumentIndexer:
                 model_kwargs=embedding_config.get('kwargs', {})
             )
     
-    def load_documents(self) -> List[Dict[str, Any]]:
-        """Load all PDF documents from the data directory."""
-        documents = []
-        for filename in os.listdir(self.data_dir):
-            if filename.lower().endswith('.pdf'):
-                file_path = os.path.join(self.data_dir, filename)
-                loader = PyPDFLoader(file_path)
-                docs = loader.load()
-                
-                # Add metadata
-                for i, doc in enumerate(docs):
-                    doc.metadata.update({
-                        'source': filename,
-                        'page': i,
-                        'file_path': file_path
-                    })
-                
-                documents.extend(docs)
+    def _configure_file_handlers(self):
+        """Configure file loaders and processors for different file types"""
+        # Define file loaders by extension
+        self.file_loaders = {
+            '.pdf': PyPDFLoader,
+            '.txt': TextLoader,
+            '.docx': UnstructuredWordDocumentLoader,
+            '.doc': UnstructuredWordDocumentLoader,
+            '.csv': CSVLoader,
+            '.md': UnstructuredMarkdownLoader,
+        }
         
-        return documents
+        # Get file processor configurations
+        self.file_processors_config = self.config.get('file_processors', {})
+        
+    def _get_processor_for_file_type(self, file_extension: str) -> DocumentProcessor:
+        """Get the appropriate processor for the file type"""
+        # Remove the dot from extension if present
+        if file_extension.startswith('.'):
+            file_extension = file_extension[1:]
+        
+        # Get processor config for this file type, or use default
+        processor_config = self.file_processors_config.get(file_extension, {})
+        processor_type = processor_config.get('processor', 'chunk_semantic')
+        
+        # Get text splitter config, fallback to default if not specified
+        text_splitter_config = processor_config.get('text_splitter', self.default_text_splitter_config)
+        
+        # Create and return the appropriate processor
+        if processor_type == 'summary':
+            return SummaryProcessor(text_splitter_config)
+        elif processor_type == 'hybrid':
+            return HybridProcessor(text_splitter_config)
+        elif processor_type == 'structured':
+            return StructuredProcessor(text_splitter_config, 
+                                       separator=processor_config.get('separator', ','))
+        else:  # Default to chunk_semantic
+            return ChunkSemanticProcessor(text_splitter_config)
     
-    def split_documents(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Split documents into smaller chunks while preserving metadata."""
-        return self.text_splitter.split_documents(documents)
+    def _get_loader_for_file(self, file_path: str):
+        """Get the appropriate loader for the file type"""
+        _, file_extension = os.path.splitext(file_path.lower())
+        
+        if file_extension in self.file_loaders:
+            return self.file_loaders[file_extension](file_path)
+        else:
+            # Default to text loader if extension not recognized
+            print(f"Warning: No specific loader for {file_extension}, using TextLoader as default")
+            return TextLoader(file_path)
+    
+    def load_and_process_file(self, file_path: str) -> List[Dict[str, Any]]:
+        """Load and process a single file"""
+        # Get file extension
+        _, file_extension = os.path.splitext(file_path.lower())
+        
+        # Get loader for this file type
+        try:
+            loader = self._get_loader_for_file(file_path)
+            documents = loader.load()
+            
+            # Add metadata
+            filename = os.path.basename(file_path)
+            for i, doc in enumerate(documents):
+                doc.metadata.update({
+                    'source': filename,
+                    'page': i,
+                    'file_path': file_path,
+                    'file_type': file_extension[1:] if file_extension.startswith('.') else file_extension
+                })
+            
+            # Process documents based on file type
+            processor = self._get_processor_for_file_type(file_extension)
+            processed_docs = processor.process(documents)
+            
+            print(f"Processed {file_path}: {len(documents)} original pages, {len(processed_docs)} chunks")
+            return processed_docs
+            
+        except Exception as e:
+            print(f"Error processing file {file_path}: {e}")
+            return []
+    
+    def load_documents(self) -> List[Dict[str, Any]]:
+        """Load all supported documents from the data directory."""
+        all_documents = []
+        files_to_process = []
+        
+        # Collect all supported files
+        for filename in os.listdir(self.data_dir):
+            file_path = os.path.join(self.data_dir, filename)
+            if not os.path.isfile(file_path):
+                continue
+                
+            _, file_extension = os.path.splitext(filename.lower())
+            if file_extension in self.file_loaders:
+                files_to_process.append(file_path)
+        
+        print(f"Found {len(files_to_process)} files to process")
+        
+        # Process files - either in parallel or sequentially
+        if self.parallel_enabled and len(files_to_process) > 1:
+            print(f"Processing files in parallel with {self.max_workers} workers")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                # Submit all files for processing
+                future_to_file = {
+                    executor.submit(self.load_and_process_file, file_path): file_path 
+                    for file_path in files_to_process
+                }
+                
+                # Collect results as they complete
+                for future in concurrent.futures.as_completed(future_to_file):
+                    file_path = future_to_file[future]
+                    try:
+                        processed_docs = future.result()
+                        all_documents.extend(processed_docs)
+                    except Exception as e:
+                        print(f"Error processing {file_path}: {e}")
+        else:
+            print("Processing files sequentially")
+            for file_path in files_to_process:
+                processed_docs = self.load_and_process_file(file_path)
+                all_documents.extend(processed_docs)
+        
+        return all_documents
     
     def create_vector_store(self, documents: List[Dict[str, Any]]) -> Chroma:
         """Create or update the vector store with document embeddings."""
+        if not documents:
+            print("Warning: No documents to index")
+            return None
+            
         vector_store = Chroma.from_documents(
             documents=documents,
             embedding=self.embedding_model,
@@ -154,18 +355,17 @@ class DocumentIndexer:
             shutil.rmtree(self.db_dir)
             os.makedirs(self.db_dir, exist_ok=True)
             
-        print("Loading documents...")
+        print("Loading and processing documents...")
         documents = self.load_documents()
-        print(f"Loaded {len(documents)} document pages.")
+        print(f"Total processed documents: {len(documents)} chunks")
         
-        print("Splitting documents...")
-        chunks = self.split_documents(documents)
-        print(f"Created {len(chunks)} document chunks.")
-        
-        print("Computing embeddings and storing in vector database...")
-        try:
-            self.create_vector_store(chunks)
-            print("Indexing complete!")
-        except Exception as e:
-            print(f"Error during indexing: {e}")
-            print("Try running with reset_db=True to recreate the vector store.")
+        if documents:
+            print("Computing embeddings and storing in vector database...")
+            try:
+                self.create_vector_store(documents)
+                print("Indexing complete!")
+            except Exception as e:
+                print(f"Error during indexing: {e}")
+                print("Try running with reset_db=True to recreate the vector store.")
+        else:
+            print("No documents were processed. Indexing aborted.")

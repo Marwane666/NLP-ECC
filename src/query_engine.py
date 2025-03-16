@@ -1,35 +1,28 @@
 import yaml
-import warnings
-from typing import List, Dict, Any, Tuple
+import os
+from typing import List, Dict, Any, Tuple, Optional
+from langchain_community.vectorstores import Chroma
 
 # Use updated imports to fix deprecation warnings
-try:
-    from langchain_huggingface import HuggingFaceEmbeddings
-    HUGGINGFACE_AVAILABLE = True
-except ImportError:
-    from langchain_community.embeddings import HuggingFaceEmbeddings
-    HUGGINGFACE_AVAILABLE = False
-    warnings.warn(
-        "Using deprecated HuggingFaceEmbeddings from langchain_community. "
-        "Install langchain-huggingface for the updated version."
-    )
-
 try:
     from langchain_chroma import Chroma
     CHROMA_AVAILABLE = True
 except ImportError:
     from langchain_community.vectorstores import Chroma
     CHROMA_AVAILABLE = False
-    warnings.warn(
-        "Using deprecated Chroma from langchain_community. "
-        "Install langchain-chroma for the updated version."
-    )
+
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+    HUGGINGFACE_AVAILABLE = True
+except ImportError:
+    from langchain_community.embeddings import HuggingFaceEmbeddings
+    HUGGINGFACE_AVAILABLE = False
 
 # Conditionally import Azure clients
 try:
     from src.azure_clients import AzureOpenAIEmbeddings, AzureInferenceEmbeddings
 except ImportError:
-    # Create placeholder classes to avoid errors when Azure modules are not available
+    # Placeholder classes to avoid errors when Azure modules are not available
     class AzureOpenAIEmbeddings:
         def __init__(self, **kwargs):
             raise ImportError("Azure OpenAI modules not available. Please install with 'pip install langchain-openai'")
@@ -38,26 +31,40 @@ except ImportError:
         def __init__(self, **kwargs):
             raise ImportError("Azure AI Inference modules not available. Please install with 'pip install azure-ai-inference'")
 
+
 class QueryEngine:
-    """Handles querying the vector store for relevant documents."""
+    """Handles document retrieval from the vector store."""
     
     def __init__(self, config_path: str):
-        """Initialize with configuration from YAML file."""
+        """
+        Initialize with configuration from YAML file.
+        
+        Args:
+            config_path: Path to configuration file
+        """
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
         self.db_dir = self.config['vector_db_directory']
-        self.k = self.config['retrieval']['top_k']
+        self.top_k = self.config['retrieval'].get('top_k', 5)
         
         # Initialize embedding model
         self._initialize_embedding_model()
         
-        # Load vector store
-        self.vector_store = Chroma(
-            persist_directory=self.db_dir,
-            embedding_function=self.embedding_model
-        )
-    
+        # Check if vector store exists
+        if not os.path.exists(self.db_dir):
+            print(f"Warning: Vector store directory {self.db_dir} does not exist.")
+            self.vector_store = None
+        else:
+            try:
+                self.vector_store = Chroma(
+                    persist_directory=self.db_dir,
+                    embedding_function=self.embedding_model
+                )
+            except Exception as e:
+                print(f"Error loading vector store: {e}")
+                self.vector_store = None
+        
     def _initialize_embedding_model(self):
         """Initialize the embedding model based on configuration."""
         embedding_config = self.config['embedding_model']
@@ -67,12 +74,14 @@ class QueryEngine:
         
         if embedding_type == 'azure_inference':
             # Use Azure AI Inference SDK embeddings
+            print("Using Azure AI Inference embeddings")
             self.embedding_model = AzureInferenceEmbeddings(
                 endpoint=embedding_config.get('endpoint'),
                 model_name=embedding_config.get('model_name')
             )
         elif embedding_type == 'azure_openai':
             # Use Azure OpenAI embeddings
+            print("Using Azure OpenAI embeddings")
             self.embedding_model = AzureOpenAIEmbeddings(
                 azure_endpoint=embedding_config.get('azure_endpoint'),
                 azure_deployment=embedding_config.get('azure_deployment'),
@@ -80,38 +89,82 @@ class QueryEngine:
             )
         else:
             # Default to HuggingFace embeddings
+            print("Using HuggingFace embeddings")
             self.embedding_model = HuggingFaceEmbeddings(
-                model_name=embedding_config['name'],
+                model_name=embedding_config.get('name', 'sentence-transformers/all-mpnet-base-v2'),
                 model_kwargs=embedding_config.get('kwargs', {})
             )
     
     def query_vector_store(self, query: str) -> List[Tuple[Any, float]]:
         """
-        Query the vector store for relevant documents.
+        Query the vector store and return relevant documents with similarity scores.
         
         Args:
-            query: The user query string
+            query: The query text
             
         Returns:
-            List of tuples containing (document, similarity_score)
+            List of tuples (document, similarity_score)
         """
-        # Retrieve documents with similarity scores
-        docs_with_scores = self.vector_store.similarity_search_with_score(
-            query=query,
-            k=self.k
-        )
-        
-        return docs_with_scores
-    
-    def format_results(self, results: List[Tuple[Any, float]]) -> List[Dict[str, Any]]:
-        """Format the query results for better readability."""
-        formatted_results = []
-        
-        for doc, score in results:
-            formatted_results.append({
-                'content': doc.page_content,
-                'metadata': doc.metadata,
-                'similarity_score': score
-            })
+        if not self.vector_store:
+            print("Vector store is not initialized.")
+            return []
             
-        return formatted_results
+        try:
+            results = self.vector_store.similarity_search_with_score(
+                query=query,
+                k=self.top_k
+            )
+            return results
+        except Exception as e:
+            print(f"Error querying vector store: {e}")
+            return []
+    
+    def get_document_metadata(self) -> List[Dict[str, Any]]:
+        """
+        Get metadata for all documents in the vector store.
+        
+        Returns:
+            List of document metadata dictionaries
+        """
+        if not self.vector_store:
+            print("Vector store is not initialized.")
+            return []
+            
+        try:
+            # Use the Chroma client's get_collection method to access metadata
+            collection = self.vector_store._collection
+            
+            # Get all metadata
+            result = collection.get()
+            
+            # Extract and return just the metadata
+            if result and 'metadatas' in result:
+                return result['metadatas']
+            else:
+                return []
+                
+        except Exception as e:
+            print(f"Error retrieving document metadata: {e}")
+            return []
+
+    def delete_documents(self, filter_dict: Dict[str, Any]) -> bool:
+        """
+        Delete documents from the vector store based on filter criteria.
+        
+        Args:
+            filter_dict: Dictionary of metadata fields to match for deletion
+            
+        Returns:
+            True if deletion was successful, False otherwise
+        """
+        if not self.vector_store:
+            print("Vector store is not initialized.")
+            return False
+            
+        try:
+            # Use Chroma's delete method with the filter
+            self.vector_store._collection.delete(where=filter_dict)
+            return True
+        except Exception as e:
+            print(f"Error deleting documents: {e}")
+            return False
