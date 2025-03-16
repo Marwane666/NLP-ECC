@@ -3,6 +3,7 @@ import yaml
 import shutil
 import warnings
 import concurrent.futures
+import traceback  # Add missing import
 from typing import List, Dict, Any, Optional, Callable
 from langchain_community.document_loaders import (
     PyPDFLoader, 
@@ -135,6 +136,77 @@ class StructuredProcessor(DocumentProcessor):
         # For now, we'll use the default text splitter
         return super().process(documents)
 
+class AutoDetectProcessor(DocumentProcessor):
+    """Automatically select the best processing strategy based on document content"""
+    
+    def __init__(self, text_splitter_config: Dict[str, Any]):
+        super().__init__(text_splitter_config)
+        # Initialize different processors to be used based on content analysis
+        self.chunk_processor = ChunkSemanticProcessor(text_splitter_config)
+        
+        # Create a recursive character text splitter with smaller chunks for summarization
+        summary_config = text_splitter_config.copy()
+        summary_config['chunk_size'] = text_splitter_config.get('chunk_size', 1000) * 3  # Use larger chunks for summarization
+        self.summary_processor = SummaryProcessor(summary_config)
+        
+        # Create a hybrid processor
+        self.hybrid_processor = HybridProcessor(text_splitter_config)
+    
+    def process(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Process documents by automatically selecting the best strategy
+        based on content analysis
+        """
+        if not documents:
+            return []
+            
+        # Analyze document content to determine the best processing approach
+        best_processor = self._determine_best_processor(documents)
+        
+        # Apply the selected processor
+        return best_processor.process(documents)
+    
+    def _determine_best_processor(self, documents: List[Dict[str, Any]]) -> DocumentProcessor:
+        """
+        Analyze document content and select the best processor
+        
+        This implementation uses simple heuristics, but could be improved with ML
+        """
+        # Default to chunk processor
+        if not documents:
+            return self.chunk_processor
+            
+        # Get total text content
+        total_text = " ".join([doc.page_content for doc in documents])
+        total_length = len(total_text)
+        
+        # Check if the document is very long (might benefit from summarization)
+        if total_length > 20000:  # More than ~20k chars
+            # Check if the document has clear sections or headings (might benefit from chunking)
+            section_indicators = ['#', '##', 'Chapter', 'Section', 'Introduction', 'Summary', 'Conclusion']
+            has_clear_sections = any(indicator in total_text for indicator in section_indicators)
+            
+            # Check if document has a lot of technical content (equations, code, etc.)
+            technical_indicators = ['```', 'def ', 'class ', '=', '==', '->', '=>', 'function', 'return', 'if', 'else']
+            has_technical_content = sum(1 for indicator in technical_indicators if indicator in total_text) > 3
+            
+            if has_clear_sections and has_technical_content:
+                # Technical content with clear sections - use hybrid approach
+                print(f"Auto-processor: Selected hybrid approach for document with clear sections and technical content")
+                return self.hybrid_processor
+            elif has_clear_sections:
+                # Clear sections - use chunk approach
+                print(f"Auto-processor: Selected chunking approach for document with clear sections")
+                return self.chunk_processor
+            else:
+                # Very long without clear sections - use summary approach
+                print(f"Auto-processor: Selected summary approach for long document without clear sections")
+                return self.summary_processor
+        else:
+            # Shorter document - use standard chunking
+            print(f"Auto-processor: Selected standard chunking for shorter document")
+            return self.chunk_processor
+
 class DocumentIndexer:
     """Handles the pipeline for loading, splitting, embedding, and storing documents."""
     
@@ -235,7 +307,9 @@ class DocumentIndexer:
         text_splitter_config = processor_config.get('text_splitter', self.default_text_splitter_config)
         
         # Create and return the appropriate processor
-        if processor_type == 'summary':
+        if processor_type == 'auto_detect':
+            return AutoDetectProcessor(text_splitter_config)
+        elif processor_type == 'summary':
             return SummaryProcessor(text_splitter_config)
         elif processor_type == 'hybrid':
             return HybridProcessor(text_splitter_config)
@@ -261,10 +335,22 @@ class DocumentIndexer:
         # Get file extension
         _, file_extension = os.path.splitext(file_path.lower())
         
+        # Validate file extension
+        if file_extension not in self.file_loaders:
+            print(f"Unsupported file extension: {file_extension}")
+            return []
+        
         # Get loader for this file type
         try:
+            print(f"Loading file: {file_path}")
             loader = self._get_loader_for_file(file_path)
             documents = loader.load()
+            
+            if len(documents) == 0:
+                print(f"Warning: No documents loaded from {file_path}")
+                return []
+                
+            print(f"Loaded {len(documents)} pages from {file_path}")
             
             # Add metadata
             filename = os.path.basename(file_path)
@@ -284,7 +370,8 @@ class DocumentIndexer:
             return processed_docs
             
         except Exception as e:
-            print(f"Error processing file {file_path}: {e}")
+            print(f"Error processing file {file_path}: {str(e)}")
+            traceback.print_exc()
             return []
     
     def load_documents(self) -> List[Dict[str, Any]]:
@@ -335,13 +422,83 @@ class DocumentIndexer:
         if not documents:
             print("Warning: No documents to index")
             return None
+        
+        try:
+            # Check for embedding dimension mismatch issue
+            # First get the dimension of the embedding model
+            test_embedding = self.embedding_model.embed_query("Test")
+            embedding_dimension = len(test_embedding)
+            print(f"Current embedding model dimension: {embedding_dimension}")
             
-        vector_store = Chroma.from_documents(
-            documents=documents,
-            embedding=self.embedding_model,
-            persist_directory=self.db_dir
-        )
-        return vector_store
+            # Check if vector store already exists with different dimensions
+            if os.path.exists(self.db_dir) and os.path.isdir(self.db_dir):
+                try:
+                    # Try to load the existing vector store
+                    vector_store = Chroma(
+                        persist_directory=self.db_dir,
+                        embedding_function=self.embedding_model
+                    )
+                    
+                    # If we got here, attempt to add documents safely
+                    try:
+                        vector_store.add_documents(documents)
+                        vector_store.persist()
+                        print(f"Added {len(documents)} documents to existing vector store")
+                        return vector_store
+                    except Exception as e:
+                        # If we get a dimension mismatch error, we need to recreate the vector store
+                        if "InvalidDimensionException" in str(e) or "dimension" in str(e).lower():
+                            print(f"Dimension mismatch detected: {str(e)}")
+                            print("Recreating vector store with new embedding dimensions...")
+                            
+                            # Backup the old vector store
+                            backup_dir = f"{self.db_dir}_backup_{int(time.time())}"
+                            os.makedirs(backup_dir, exist_ok=True)
+                            
+                            # Delete the old vector store
+                            shutil.rmtree(self.db_dir)
+                            os.makedirs(self.db_dir, exist_ok=True)
+                            
+                            # Create new vector store from scratch
+                            vector_store = Chroma.from_documents(
+                                documents=documents,
+                                embedding=self.embedding_model,
+                                persist_directory=self.db_dir
+                            )
+                            print(f"Created new vector store with {len(documents)} documents")
+                            return vector_store
+                        else:
+                            # Some other error with the vector store
+                            raise e
+                except Exception as e:
+                    print(f"Error with existing vector store: {str(e)}")
+                    print("Creating a new vector store...")
+                    
+                    # Backup and recreate vector store
+                    if os.path.exists(self.db_dir):
+                        backup_dir = f"{self.db_dir}_backup_{int(time.time())}"
+                        try:
+                            shutil.copytree(self.db_dir, backup_dir)
+                            print(f"Backed up existing vector store to {backup_dir}")
+                        except Exception as backup_error:
+                            print(f"Backup failed: {str(backup_error)}")
+                        
+                        # Delete the old vector store
+                        shutil.rmtree(self.db_dir)
+                        os.makedirs(self.db_dir, exist_ok=True)
+            
+            # Create new vector store if we don't have one yet
+            vector_store = Chroma.from_documents(
+                documents=documents,
+                embedding=self.embedding_model,
+                persist_directory=self.db_dir
+            )
+            print(f"Created new vector store with {len(documents)} documents")
+            return vector_store
+        except Exception as e:
+            print(f"Error creating/updating vector store: {str(e)}")
+            traceback.print_exc()
+            return None
     
     def index(self, reset_db: bool = False) -> None:
         """

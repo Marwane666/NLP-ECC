@@ -65,6 +65,7 @@
         
         <div class="mb-4">
             <a href="/" class="btn btn-secondary">Back to Home</a>
+            <a href="/index" class="btn btn-primary">Go to Document Index</a>
             <button type="button" class="btn btn-success ms-2" onclick="restoreDefaults()">Restore Defaults</button>
             <button type="button" class="btn btn-danger ms-2" onclick="resetForm()">Reset Changes</button>
         </div>
@@ -168,6 +169,7 @@
                                     <div class="col-md-4">
                                         <div class="form-floating">
                                             <select class="form-select" id="{{ ext }}_processor" name="file_processors.{{ ext }}.processor">
+                                                <option value="auto_detect" {% if settings.processor == 'auto_detect' %}selected{% endif %}>Auto-Detect</option>
                                                 <option value="chunk_semantic" {% if settings.processor == 'chunk_semantic' %}selected{% endif %}>Chunk Semantic</option>
                                                 <option value="summary" {% if settings.processor == 'summary' %}selected{% endif %}>Summary</option>
                                                 <option value="hybrid" {% if settings.processor == 'hybrid' %}selected{% endif %}>Hybrid</option>
@@ -345,6 +347,7 @@
                     <div class="mb-3">
                         <label for="newProcessorType" class="form-label">Processor Type</label>
                         <select class="form-select" id="newProcessorType">
+                            <option value="auto_detect">Auto-Detect</option>
                             <option value="chunk_semantic">Chunk Semantic</option>
                             <option value="summary">Summary</option>
                             <option value="hybrid">Hybrid</option>
@@ -543,6 +546,7 @@
                             <div class="col-md-4">
                                 <div class="form-floating">
                                     <select class="form-select" id="${extension}_processor" name="file_processors.${extension}.processor">
+                                        <option value="auto_detect" ${processorType === 'auto_detect' ? 'selected' : ''}>Auto-Detect</option>
                                         <option value="chunk_semantic" ${processorType === 'chunk_semantic' ? 'selected' : ''}>Chunk Semantic</option>
                                         <option value="summary" ${processorType === 'summary' ? 'selected' : ''}>Summary</option>
                                         <option value="hybrid" ${processorType === 'hybrid' ? 'selected' : ''}>Hybrid</option>

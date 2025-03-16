@@ -21,10 +21,20 @@
             font-family: monospace;
             margin-bottom: 20px;
         }
+        .navigation-bar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <div class="navigation-bar">
+            <a href="/" class="btn btn-primary">← Return to Main Application</a>
+            <button onclick="checkEnvironment()" class="btn btn-warning">Check Environment Status</button>
+        </div>
+        
         <h1 class="text-center mb-4">Environment Setup</h1>
         
         <div class="alert alert-warning">

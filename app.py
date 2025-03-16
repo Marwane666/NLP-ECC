@@ -10,6 +10,7 @@ from src.qa_system import QASystem
 from src.chatbot import Chatbot
 import traceback
 import shutil
+import time  # Add missing import for timestamp generation
 
 app = Flask(__name__)
 app.secret_key = "rag_system_secret_key"  # For session management
@@ -58,6 +59,11 @@ def home():
                           file_processors=file_processors,
                           parallel_config=parallel_config)
 
+@app.route('/index')
+def index_page():
+    """Redirect to the index tab on the home page"""
+    return redirect('/#index')
+
 @app.route('/index_documents', methods=['POST'])
 def index_documents():
     try:
@@ -67,18 +73,50 @@ def index_documents():
         if 'file' in request.files and request.files['file'].filename:
             uploaded_file = request.files['file']
             
+            if not uploaded_file.filename:
+                return jsonify({
+                    "success": False,
+                    "message": "No file selected"
+                })
+                
+            # Ensure valid file extension
+            _, file_extension = os.path.splitext(uploaded_file.filename.lower())
+            if file_extension not in ['.pdf', '.txt', '.docx', '.doc', '.csv', '.md']:
+                return jsonify({
+                    "success": False,
+                    "message": f"Unsupported file type: {file_extension}. Supported formats: PDF, TXT, DOCX, DOC, CSV, MD."
+                })
+            
             # Save the file to the data directory
             file_path = os.path.join(indexer.data_dir, uploaded_file.filename)
             uploaded_file.save(file_path)
             
+            # Check if this is an upload-only request or upload-and-index request
+            index_after_upload = request.form.get('index_after_upload', 'false').lower() == 'true'
+            
+            if not index_after_upload:
+                # Return success without indexing
+                return jsonify({
+                    "success": True,
+                    "message": f"File {uploaded_file.filename} uploaded successfully to data directory",
+                    "indexed": False
+                })
+            
+            # If we get here, the user wants to index the file after uploading
+            # Create a new indexer instance to avoid file locking problems
+            new_indexer = DocumentIndexer(config_path)
+            
             # Process the single file
-            docs = indexer.load_and_process_file(file_path)
-            if docs:
-                indexer.create_vector_store(docs)
+            docs = new_indexer.load_and_process_file(file_path)
+            if docs and len(docs) > 0:
+                # Add to vector store
+                new_indexer.create_vector_store(docs)
+                
                 return jsonify({
                     "success": True,
                     "message": f"Successfully indexed file: {uploaded_file.filename}",
-                    "details": f"Processed {len(docs)} chunks from {uploaded_file.filename}"
+                    "details": f"Processed {len(docs)} chunks from {uploaded_file.filename}",
+                    "indexed": True
                 })
             else:
                 return jsonify({
@@ -229,7 +267,7 @@ def ask_question():
             for line in response_lines:
                 if line.startswith("Answer:"):
                     capture = True
-                    answer = line[7:].strip()  # Remove "Answer: " prefix
+                    answer = line[7:].trip()  # Remove "Answer: " prefix
                 elif capture:
                     answer += " " + line.strip()
             
@@ -335,8 +373,9 @@ def show_config():
             "details": traceback.format_exc()
         })
 
-@app.route('/delete_document', methods=['POST'])
-def delete_document():
+@app.route('/delete_data_file', methods=['POST'])
+def delete_data_file():
+    """Delete a file from the data directory without affecting the vector store"""
     try:
         data = request.json
         filename = data.get('filename')
@@ -349,45 +388,89 @@ def delete_document():
         
         # Check if the file exists in the data directory
         file_path = os.path.join(indexer.data_dir, filename)
-        file_exists = os.path.isfile(file_path)
+        if not os.path.isfile(file_path):
+            return jsonify({
+                "success": False,
+                "message": f"File '{filename}' not found in data directory"
+            })
         
         # Try to remove the file
-        if file_exists:
-            os.remove(file_path)
-            file_deleted = True
-        else:
-            file_deleted = False
-        
-        # Force a re-index without the deleted file
-        # We need to rebuild the vector DB to completely remove the file
         try:
-            # Create a temporary indexer with reset_db=False to avoid clearing everything
-            temp_indexer = DocumentIndexer(config_path)
-            # Process all remaining files
-            docs = temp_indexer.load_documents()
+            os.remove(file_path)
+            return jsonify({
+                "success": True,
+                "message": f"Successfully deleted file '{filename}' from data directory"
+            })
+        except PermissionError:
+            return jsonify({
+                "success": False,
+                "message": f"Could not delete file '{filename}' because it's being used by another process"
+            })
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "message": f"Error deleting file: {str(e)}"
+            })
             
-            # If there are documents, recreate the vector store
-            if docs:
-                # First remove the old vector store
-                shutil.rmtree(temp_indexer.db_dir)
-                os.makedirs(temp_indexer.db_dir, exist_ok=True)
-                
-                # Then create a new one with the remaining documents
-                temp_indexer.create_vector_store(docs)
-                
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e),
+            "details": traceback.format_exc()
+        })
+
+@app.route('/delete_document', methods=['POST'])
+def delete_document():
+    try:
+        data = request.json
+        filename = data.get('filename')
+        delete_from_data = data.get('delete_from_data', False)
+        
+        if not filename:
+            return jsonify({
+                "success": False,
+                "message": "No filename provided"
+            })
+        
+        # Check if the file exists in the data directory
+        file_path = os.path.join(indexer.data_dir, filename)
+        file_exists = os.path.isfile(file_path)
+        file_deleted = False
+        
+        # Delete the file from data directory if requested
+        if delete_from_data and file_exists:
+            try:
+                os.remove(file_path)
+                file_deleted = True
+            except Exception as e:
+                return jsonify({
+                    "success": False,
+                    "message": f"Error deleting file from data directory: {str(e)}",
+                    "details": traceback.format_exc()
+                })
+        
+        # Delete documents from vector store without rebuilding
+        try:
+            # Create a new query engine instance to avoid stale connections
+            fresh_query_engine = QueryEngine(config_path)
+            
+            # Create filter to find documents from this file
+            filter_dict = {"source": filename}
+            
+            # Delete documents that match the filter
+            deleted = fresh_query_engine.delete_documents(filter_dict)
+            
+            if deleted:
                 return jsonify({
                     "success": True,
-                    "message": f"Document '{filename}' was deleted and index was updated",
-                    "file_deleted": file_deleted
+                    "message": f"Document '{filename}' was removed from the index",
+                    "file_deleted": file_deleted,
+                    "docs_deleted": deleted
                 })
             else:
-                # No documents left, just clear the vector store
-                shutil.rmtree(temp_indexer.db_dir)
-                os.makedirs(temp_indexer.db_dir, exist_ok=True)
-                
                 return jsonify({
-                    "success": True,
-                    "message": f"Document '{filename}' was deleted. No documents left in the index.",
+                    "success": False,
+                    "message": f"No documents found for '{filename}' in the vector store",
                     "file_deleted": file_deleted
                 })
                 
@@ -602,6 +685,191 @@ def restore_config_defaults():
         return jsonify({
             "success": False,
             "message": f"Error restoring default configuration: {str(e)}",
+            "details": traceback.format_exc()
+        })
+
+@app.route('/list_data_files', methods=['GET'])
+def list_data_files():
+    """List all files in the data directory (before indexing)"""
+    try:
+        # Create a new indexer instance to get data directory path
+        temp_indexer = DocumentIndexer(config_path)
+        data_dir = temp_indexer.data_dir
+        
+        if not os.path.exists(data_dir):
+            return jsonify({
+                "success": False,
+                "message": f"Data directory {data_dir} does not exist"
+            })
+            
+        # Get all files in the data directory
+        files = []
+        for filename in os.listdir(data_dir):
+            file_path = os.path.join(data_dir, filename)
+            if os.path.isfile(file_path):
+                # Get file size and last modified time
+                file_stat = os.stat(file_path)
+                size_kb = file_stat.st_size / 1024  # Convert to KB
+                modified_time = file_stat.st_mtime
+                
+                # Get file extension
+                _, file_extension = os.path.splitext(filename.lower())
+                file_type = file_extension[1:] if file_extension.startswith('.') else file_extension
+                
+                # Determine if file is indexable
+                indexable = file_extension.lower() in ['.pdf', '.txt', '.docx', '.doc', '.csv', '.md']
+                
+                files.append({
+                    "name": filename,
+                    "type": file_type,
+                    "size_kb": round(size_kb, 2),
+                    "modified": modified_time,
+                    "indexable": indexable
+                })
+        
+        return jsonify({
+            "success": True,
+            "data_dir": data_dir,
+            "files": files
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e),
+            "details": traceback.format_exc()
+        })
+
+@app.route('/empty_vector_db', methods=['POST'])
+def empty_vector_db():
+    """Empty the vector database completely"""
+    try:
+        # Create a new indexer instance to get vector DB path
+        temp_indexer = DocumentIndexer(config_path)
+        vector_db_dir = temp_indexer.db_dir
+        
+        # Always ensure we're using the exact name from config, with no suffixes
+        with open(config_path, 'r') as f:
+            config_data = yaml.safe_load(f)
+            vector_db_dir = config_data.get('vector_db_directory', 'vector_db')
+            
+        # Make sure the path is absolute
+        if not os.path.isabs(vector_db_dir):
+            vector_db_dir = os.path.join(os.path.dirname(__file__), vector_db_dir)
+        
+        print(f"Using vector database directory: {vector_db_dir}")
+        
+        if not os.path.exists(vector_db_dir):
+            return jsonify({
+                "success": True,
+                "message": "Vector database does not exist or is already empty."
+            })
+        
+        try:
+            # Release all global references to vector store
+            global qa_system, query_engine, chatbot, indexer
+            
+            print("Releasing all references to the database...")
+            # Set to None to release connections
+            qa_system = None
+            query_engine = None
+            chatbot = None
+            indexer = None
+            
+            # Force garbage collection to release file handles
+            import gc
+            gc.collect()
+            
+            # Wait a moment for resources to be released
+            time.sleep(2)
+            
+            # Delete the vector DB directory completely
+            print(f"Deleting vector database directory: {vector_db_dir}")
+            
+            # Delete directory and all its contents
+            if os.path.exists(vector_db_dir):
+                # First approach: use shutil.rmtree with error handler
+                try:
+                    def onerror(func, path, exc_info):
+                        """Error handler for shutil.rmtree that attempts to handle permission errors"""
+                        import stat
+                        os.chmod(path, stat.S_IWRITE)
+                        func(path)
+                    
+                    shutil.rmtree(vector_db_dir, onerror=onerror)
+                except Exception as e:
+                    print(f"Standard deletion failed: {e}")
+                    
+                    # Second approach: use system commands
+                    try:
+                        if sys.platform == 'win32':
+                            os.system(f'rd /s /q "{vector_db_dir}"')
+                        else:
+                            os.system(f'rm -rf "{vector_db_dir}"')
+                    except Exception as e2:
+                        print(f"System command failed: {e2}")
+            
+            # Create the directory with original name from config
+            os.makedirs(vector_db_dir, exist_ok=True)
+            
+            # Let Python release any handles before proceeding
+            gc.collect()
+            time.sleep(1)
+            
+            # Create an empty Chroma database
+            print("Initializing empty vector database...")
+            
+            # Initialize with a HuggingFace embedding model for compatibility
+            from langchain_community.embeddings import HuggingFaceEmbeddings
+            embedding_model = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-mpnet-base-v2",
+                model_kwargs={"device": "cpu"}
+            )
+            
+            # Create a new empty Chroma instance
+            try:
+                # Try to import the newer package first
+                from langchain_chroma import Chroma
+                Chroma(persist_directory=vector_db_dir, embedding_function=embedding_model)
+            except ImportError:
+                # Fall back to community version
+                from langchain_community.vectorstores import Chroma
+                Chroma(persist_directory=vector_db_dir, embedding_function=embedding_model)
+            
+            # Reinitialize components
+            print("Reinitializing components...")
+            try:
+                qa_system = QASystem(config_path)
+                query_engine = QueryEngine(config_path)
+                chatbot = Chatbot(config_path, qa_system.llm)
+                indexer = DocumentIndexer(config_path)
+            except Exception as reinit_err:
+                print(f"Warning: Error reinitializing components: {reinit_err}")
+            
+            return jsonify({
+                "success": True,
+                "message": "Vector database has been completely emptied."
+            })
+            
+        except Exception as e:
+            # Attempt to reinitialize components even if there was an error
+            try:
+                print(f"Error during vector DB emptying: {e}")
+                qa_system = QASystem(config_path)
+                query_engine = QueryEngine(config_path)
+                chatbot = Chatbot(config_path, qa_system.llm)
+                indexer = DocumentIndexer(config_path)
+            except Exception as reinit_error:
+                print(f"Error reinitializing components: {reinit_error}")
+                
+            return jsonify({
+                "success": False,
+                "message": f"Error emptying vector database: {str(e)}",
+                "details": traceback.format_exc()
+            })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Error: {str(e)}",
             "details": traceback.format_exc()
         })
 

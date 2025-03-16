@@ -1,65 +1,50 @@
-# RAG System Configuration
-
-# Data paths
-data_directory: "data"
-vector_db_directory: "vector_db"
-
-# Embedding model settings
+data_directory: data
 embedding_model:
-  type: "huggingface" # Use HuggingFace for vector store compatibility
-  name: "sentence-transformers/all-mpnet-base-v2" # 768-dim embeddings
+  endpoint: https://models.inference.ai.azure.com
   kwargs:
-    device: "cpu"
-
-# Default text splitter settings (used as fallback)
-text_splitter:
-  chunk_size: 1000
-  chunk_overlap: 200
-
-# File-specific processing strategies
+    device: cpu
+  model_name: text-embedding-3-small
+  type: azure_inference
 file_processors:
-  pdf:
-    processor: "chunk_semantic" # Options: chunk_semantic, summary, hybrid
-    text_splitter:
-      chunk_size: 1000
-      chunk_overlap: 200
-  docx:
-    processor: "chunk_semantic"
-    text_splitter:
-      chunk_size: 800
-      chunk_overlap: 150
-  txt:
-    processor: "chunk_semantic"
-    text_splitter:
-      chunk_size: 1200
-      chunk_overlap: 250
   csv:
-    processor: "structured"
-    separator: ","
-  md:
-    processor: "chunk_semantic"
+    processor: structured
+    separator: ','
+  docx:
+    processor: auto_detect
     text_splitter:
-      chunk_size: 500
+      chunk_overlap: 150
+      chunk_size: 800
+  md:
+    processor: auto_detect
+    text_splitter:
       chunk_overlap: 100
-
-# Parallel processing settings
+      chunk_size: 500
+  pdf:
+    processor: auto_detect
+    text_splitter:
+      chunk_overlap: 200
+      chunk_size: 1000
+  txt:
+    processor: auto_detect
+    text_splitter:
+      chunk_overlap: 250
+      chunk_size: 1200
+llm:
+  endpoint: https://models.inference.ai.azure.com
+  max_tokens: 1000
+  model_name: gpt-4o
+  system_message: You are a helpful assistant that provides accurate, factual information
+    based on the provided context.
+  temperature: 0.7
+  top_p: 1.0
+  type: azure_inference
+max_chat_history: 10
 parallel_processing:
   enabled: true
-  max_workers: 4 # Number of parallel workers for document processing
-
-# Retrieval settings
+  max_workers: 4
 retrieval:
   top_k: 5
-
-# LLM settings - using Azure AI Inference exclusively
-llm:
-  type: "azure_inference"
-  endpoint: "https://models.inference.ai.azure.com" # Will use env var if this is empty
-  model_name: "gpt-4o" # Will use env var if this is empty
-  temperature: 0.7
-  max_tokens: 1000
-  top_p: 1.0
-  system_message: "You are a helpful assistant that provides accurate, factual information based on the provided context."
-
-# Chat settings
-max_chat_history: 10
+text_splitter:
+  chunk_overlap: 200
+  chunk_size: 1000
+vector_db_directory: vector_db_1742166892

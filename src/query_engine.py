@@ -1,5 +1,6 @@
 import yaml
 import os
+import traceback
 from typing import List, Dict, Any, Tuple, Optional
 from langchain_community.vectorstores import Chroma
 
@@ -162,9 +163,38 @@ class QueryEngine:
             return False
             
         try:
-            # Use Chroma's delete method with the filter
-            self.vector_store._collection.delete(where=filter_dict)
+            # Get a reference to the underlying collection
+            collection = self.vector_store._collection
+            
+            # First get IDs of documents matching the filter
+            if not filter_dict:
+                print("Warning: No filter provided. This would delete all documents.")
+                return False
+            
+            # Convert filter dict to where clause
+            where_clause = {}
+            for key, value in filter_dict.items():
+                where_clause[f"metadata.{key}"] = value
+            
+            # Get matching documents
+            result = collection.get(where=where_clause)
+            
+            if not result or 'ids' not in result or not result['ids']:
+                print("No matching documents found.")
+                return False
+            
+            # Delete the matching documents
+            collection.delete(ids=result['ids'])
+            print(f"Deleted {len(result['ids'])} documents matching filter: {filter_dict}")
+            
+            # Force persistence
+            self.vector_store.persist()
+            
+            # Output IDs for debugging
+            print(f"Deleted document IDs: {result['ids'][:5]}...")
+            
             return True
         except Exception as e:
-            print(f"Error deleting documents: {e}")
+            print(f"Error deleting documents: {str(e)}")
+            traceback.print_exc()
             return False

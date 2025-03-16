@@ -1,13 +1,13 @@
-# Default RAG System Configuration
+# RAG System Configuration
 
 # Data paths
 data_directory: "data"
 vector_db_directory: "vector_db"
 
-# Embedding model settings - using Azure AI Inference embeddings by default
+# Embedding model settings - set to Azure AI Inference by default
 embedding_model:
   type: "azure_inference"
-  endpoint: "https://models.inference.ai.azure.com" 
+  endpoint: "https://models.inference.ai.azure.com"
   model_name: "text-embedding-3-small"
   kwargs:
     device: "cpu"

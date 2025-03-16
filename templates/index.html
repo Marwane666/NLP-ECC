@@ -188,13 +188,14 @@
         <strong>Warning:</strong> Some environment variables are not set
         properly. The system may not function correctly.
         <div class="mt-2">
-          <button class="btn btn-sm btn-warning" onclick="checkEnvironment()">
-            Check Environment
+          <a href="/setup_env" class="btn btn-warning">
+            <i class="bi bi-gear-fill"></i> Setup Environment Variables
+          </a>
+          <button class="btn btn-sm btn-outline-secondary ms-2" onclick="checkEnvironment()">
+            Check Again
           </button>
-          <a href="/setup_env" class="btn btn-sm btn-primary ms-2"
-            >Setup Environment</a
-          >
         </div>
+        <div class="missing-vars mt-2" id="missingVarsList"></div>
       </div>
 
       <ul class="nav nav-tabs" id="myTab" role="tablist">
@@ -282,62 +283,95 @@
             <div class="card-body">
               <h5 class="card-title">Index Documents</h5>
               <p class="card-text">
-                Index documents to make them searchable. You can upload new
-                files or process existing ones in the data directory.
+                Follow these steps to make documents searchable:
+                <ol>
+                  <li>Upload files to the data directory</li>
+                  <li>Index the files to make them searchable</li>
+                </ol>
               </p>
 
               <!-- File Upload Section -->
-              <div class="file-upload-container" id="fileUploadContainer">
-                <input
-                  type="file"
-                  id="fileUpload"
-                  accept=".pdf,.txt,.docx,.doc,.csv,.md"
-                />
-                <div>
-                  <i class="bi bi-cloud-upload"></i>
-                  <h5>Drag & Drop Files Here</h5>
-                  <p>Or click to select files</p>
-                  <p class="text-muted small">
-                    Supported formats: PDF, TXT, DOCX, CSV, MD
-                  </p>
+              <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                  <h5 class="mb-0">Step 1: Upload Files</h5>
+                </div>
+                <div class="card-body">
+                  <div class="file-upload-container" id="fileUploadContainer">
+                    <input
+                      type="file"
+                      id="fileUpload"
+                      accept=".pdf,.txt,.docx,.doc,.csv,.md"
+                    />
+                    <div>
+                      <i class="bi bi-cloud-upload"></i>
+                      <h5>Drag & Drop Files Here</h5>
+                      <p>Or click to select files</p>
+                      <p class="text-muted small">
+                        Supported formats: PDF, TXT, DOCX, CSV, MD
+                      </p>
+                    </div>
+                  </div>
+                  <div class="mt-2">
+                    <button id="uploadFileButton" class="btn btn-primary">
+                      Upload File to Data Directory
+                    </button>
+                    <button id="uploadIndexButton" class="btn btn-success ms-2">
+                      Upload & Index Selected File
+                    </button>
+                  </div>
+                  
+                  <div class="mt-4">
+                    <h6>Files in Data Directory:</h6>
+                    <div id="dataFilesContainer" class="mt-2">
+                      <p>Loading files from data directory...</p>
+                    </div>
+                    <button id="refreshDataFilesButton" class="btn btn-sm btn-outline-secondary mt-2">
+                      <i class="bi bi-arrow-repeat"></i> Refresh File List
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <!-- Indexing Options -->
-              <div class="indexing-options">
-                <div class="form-check mb-2">
-                  <input
-                    class="form-check-input"
-                    type="checkbox"
-                    id="resetDbCheckbox"
-                  />
-                  <label class="form-check-label" for="resetDbCheckbox">
-                    Reset vector database before indexing
-                  </label>
+              <!-- Indexing Section -->
+              <div class="card">
+                <div class="card-header bg-success text-white">
+                  <h5 class="mb-0">Step 2: Index Files</h5>
                 </div>
-                <button id="indexButton" class="btn btn-primary">
-                  Index All Documents
-                </button>
-                <button id="uploadIndexButton" class="btn btn-success ms-2">
-                  Upload & Index Selected File
-                </button>
-              </div>
+                <div class="card-body">
+                  <div class="mb-3">
+                    <button id="emptyVectorDbButton" class="btn btn-danger mb-3">
+                      Empty Vector Database
+                    </button>
+                    <p class="small text-muted">
+                      This will reset the vector database but keep your files in the data directory.
+                    </p>
+                  </div>
+                  
+                  <div class="indexing-options">
+                    <button id="indexButton" class="btn btn-success">
+                      Index All Files in Data Directory
+                    </button>
+                  </div>
 
-              <div class="spinner-container" id="indexSpinner">
-                <div class="spinner-border text-primary" role="status">
-                  <span class="visually-hidden">Loading...</span>
+                  <div class="spinner-container" id="indexSpinner">
+                    <div class="spinner-border text-primary" role="status">
+                      <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p>Processing documents... This might take a while.</p>
+                  </div>
+                  <div id="indexResult" class="mt-3"></div>
+                  
+                  <!-- Indexed Files Section -->
+                  <div class="mt-4">
+                    <h6>Currently Indexed Files:</h6>
+                    <div id="indexedFilesContainer" class="mt-2">
+                      <p>Loading indexed files...</p>
+                    </div>
+                    <button id="refreshIndexedFilesButton" class="btn btn-sm btn-outline-secondary mt-2">
+                      <i class="bi bi-arrow-repeat"></i> Refresh Indexed Files
+                    </button>
+                  </div>
                 </div>
-                <p>Processing documents... This might take a while.</p>
-              </div>
-              <div id="indexResult" class="mt-3"></div>
-
-              <!-- Horizontal separator -->
-              <div class="tab-separator"></div>
-
-              <!-- Indexed Files Section -->
-              <h5>Indexed Documents</h5>
-              <div id="indexedFilesContainer">
-                <p>Loading indexed files...</p>
               </div>
             </div>
           </div>
@@ -467,6 +501,11 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Add a hidden resetDbCheckbox that's referenced in JavaScript -->
+    <div style="display:none">
+      <input type="checkbox" id="resetDbCheckbox" />
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
@@ -718,13 +757,27 @@
               return;
             }
 
-            const resetDb = document.getElementById("resetDbCheckbox").checked;
+            // Validate file extension
+            const fileName = fileInput.files[0].name;
+            const fileExt = fileName.split('.').pop().toLowerCase();
+            const validExtensions = ['pdf', 'txt', 'docx', 'doc', 'csv', 'md'];
+            
+            if (!validExtensions.includes(fileExt)) {
+              document.getElementById("indexResult").innerHTML = `
+                <div class="alert alert-warning" role="alert">
+                  Invalid file type: .${fileExt}. Supported formats: PDF, TXT, DOCX, DOC, CSV, MD.
+                </div>`;
+              return;
+            }
+            
+            const resetDb = document.getElementById("resetDbCheckbox")?.checked || false;
             document.getElementById("indexSpinner").style.display = "block";
             document.getElementById("indexResult").innerHTML = "";
 
             const formData = new FormData();
             formData.append("file", fileInput.files[0]);
             formData.append("reset_db", resetDb);
+            formData.append("index_after_upload", "true"); // Explicitly set to index after upload
 
             fetch("/index_documents", {
               method: "POST",
@@ -735,19 +788,18 @@
                 document.getElementById("indexSpinner").style.display = "none";
                 if (data.success) {
                   document.getElementById("indexResult").innerHTML = `
-                    <div class="alert alert-success" role="alert">
-                      ${data.message}
-                    </div>
-                    <div class="mt-3">
-                      <small class="text-muted">Details:</small>
-                      <pre class="mt-2 p-2 bg-light">${
-                        data.details || "No details available"
-                      }</pre>
-                    </div>`;
+                        <div class="alert alert-success" role="alert">
+                            ${data.message}
+                        </div>
+                        <div class="mt-3">
+                            <small class="text-muted">Details:</small>
+                            <pre class="mt-2 p-2 bg-light">${data.details || 'No details available'}</pre>
+                        </div>`;
 
                   // Reset file input
                   fileInput.value = "";
-                  fileUploadContainer.querySelector("div").innerHTML = `
+                  const displayDiv = document.getElementById("fileUploadContainer").querySelector("div");
+                  displayDiv.innerHTML = `
                     <i class="bi bi-cloud-upload"></i>
                     <h5>Drag & Drop Files Here</h5>
                     <p>Or click to select files</p>
@@ -756,24 +808,23 @@
 
                   // Refresh the file list
                   loadIndexedFiles();
+                  loadDataFiles();
                 } else {
                   document.getElementById("indexResult").innerHTML = `
-                    <div class="alert alert-danger" role="alert">
-                      Error: ${data.message}
-                    </div>
-                    <div class="mt-3">
-                      <small class="text-muted">Details:</small>
-                      <pre class="mt-2 p-2 bg-light">${
-                        data.details || "No details available"
-                      }</pre>
-                    </div>`;
+                        <div class="alert alert-danger" role="alert">
+                            Error: ${data.message}
+                        </div>
+                        <div class="mt-3">
+                            <small class="text-muted">Details:</small>
+                            <pre class="mt-2 p-2 bg-light">${data.details || 'No details available'}</pre>
+                        </div>`;
                 }
               })
               .catch((error) => {
                 document.getElementById("indexSpinner").style.display = "none";
                 document.getElementById("indexResult").innerHTML = `
                   <div class="alert alert-danger" role="alert">
-                    Error: ${error.message}
+                      Error: ${error.message}
                   </div>`;
               });
           });
@@ -815,13 +866,6 @@
                         <span>${file.name}</span>
                         <span class="file-chunks">(${file.chunks} chunks)</span>
                       </div>
-                      <div>
-                        <button class="btn btn-sm btn-outline-danger delete-file" 
-                                data-filename="${file.name}"
-                                onclick="deleteFile('${file.name}')">
-                          <i class="bi bi-trash"></i> Delete
-                        </button>
-                      </div>
                     </div>
                   `;
                 });
@@ -845,19 +889,21 @@
 
         // Make deleteFile function available globally
         window.deleteFile = function (filename) {
-          if (
-            confirm(
-              `Are you sure you want to delete "${filename}" from the index?`
-            )
-          ) {
+          // Use a custom confirm dialog to provide option
+          if (confirm(`Delete "${filename}" from index?`)) {
+            const deleteFromData = confirm(`Also delete the file "${filename}" from the data directory?`);
+            
             document.getElementById("indexSpinner").style.display = "block";
-
+      
             fetch("/delete_document", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({ filename: filename }),
+              body: JSON.stringify({ 
+                filename: filename,
+                delete_from_data: deleteFromData 
+              }),
             })
               .then((response) => response.json())
               .then((data) => {
@@ -867,9 +913,12 @@
                     <div class="alert alert-success" role="alert">
                       ${data.message}
                     </div>`;
-
-                  // Refresh the file list
+      
+                  // Refresh both file lists
                   loadIndexedFiles();
+                  if (deleteFromData) {
+                    loadDataFiles();
+                  }
                 } else {
                   document.getElementById("indexResult").innerHTML = `
                     <div class="alert alert-danger" role="alert">
@@ -1228,13 +1277,16 @@
                 if (!data.embedding_model)
                   missingVars.push("AZURE_INFERENCE_EMBEDDING_MODEL");
 
-                document.getElementById("envWarning").innerHTML = `
-                  <strong>Warning:</strong> Some environment variables are not set properly. The system may not function correctly.
-                  <div class="mt-2">
-                    <p>Missing variables: ${missingVars.join(", ")}</p>
-                    <a href="/setup_env" class="btn btn-sm btn-primary">Setup Environment</a>
-                  </div>
-                `;
+                // Display missing variables in a more structured way
+                const missingVarsList = document.getElementById("missingVarsList");
+                if (missingVars.length > 0) {
+                  missingVarsList.innerHTML = `
+                    <span class="text-danger">Missing variables:</span>
+                    <ul class="mb-0 ps-4">
+                      ${missingVars.map(v => `<li>${v}</li>`).join('')}
+                    </ul>
+                  `;
+                }
               } else {
                 document.getElementById("envWarning").style.display = "none";
               }
@@ -1243,6 +1295,293 @@
               console.error("Error checking environment:", error);
             });
         }
+
+        // Load data directory files on page load
+        loadDataFiles();
+    
+        // Function to load files from data directory
+        function loadDataFiles() {
+          const dataFilesContainer = document.getElementById("dataFilesContainer");
+          dataFilesContainer.innerHTML = `
+            <div class="spinner-border text-primary spinner-border-sm" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div> Loading files...`;
+            
+          fetch("/list_data_files")
+            .then(response => response.json())
+            .then(data => {
+              if (data.success && data.files && data.files.length > 0) {
+                let filesHTML = `<div class="table-responsive"><table class="table table-sm table-hover">
+                  <thead>
+                    <tr>
+                      <th>File Name</th>
+                      <th>Type</th>
+                      <th>Size</th>
+                      <th>Indexable</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>`;
+                  
+                data.files.forEach(file => {
+                  // Generate a badge for indexable status
+                  const indexableBadge = file.indexable ? 
+                    '<span class="badge bg-success">Yes</span>' : 
+                    '<span class="badge bg-secondary">No</span>';
+                    
+                  filesHTML += `
+                    <tr>
+                      <td>${file.name}</td>
+                      <td><span class="badge bg-info">${file.type}</span></td>
+                      <td>${file.size_kb.toFixed(2)} KB</td>
+                      <td>${indexableBadge}</td>
+                      <td>
+                        <button class="btn btn-sm btn-outline-danger" 
+                                onclick="deleteDataFile('${file.name}')">
+                          <i class="bi bi-trash"></i> Delete
+                        </button>
+                      </td>
+                    </tr>
+                  `;
+                });
+                  
+                filesHTML += `</tbody></table></div>`;
+                dataFilesContainer.innerHTML = filesHTML;
+              } else if (data.success && (!data.files || data.files.length === 0)) {
+                dataFilesContainer.innerHTML = `
+                  <div class="alert alert-info" role="alert">
+                    No files found in data directory. Upload files first.
+                  </div>`;
+              } else {
+                dataFilesContainer.innerHTML = `
+                  <div class="alert alert-danger" role="alert">
+                    Error: ${data.message || "Unknown error"}
+                  </div>`;
+              }
+            })
+            .catch(error => {
+              dataFilesContainer.innerHTML = `
+                <div class="alert alert-danger" role="alert">
+                  Error loading files: ${error.message}
+                </div>`;
+            });
+        }
+        
+        // Add function to delete a file from data directory
+        window.deleteDataFile = function(filename) {
+          if (confirm(`Are you sure you want to delete "${filename}" from the data directory? This will not affect the index.`)) {
+            document.getElementById("indexSpinner").style.display = "block";
+            
+            fetch("/delete_data_file", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ filename: filename }),
+            })
+              .then(response => response.json())
+              .then(data => {
+                document.getElementById("indexSpinner").style.display = "none";
+                if (data.success) {
+                  document.getElementById("indexResult").innerHTML = `
+                    <div class="alert alert-success" role="alert">
+                      ${data.message}
+                    </div>`;
+                    
+                  // Refresh the data files list
+                  loadDataFiles();
+                } else {
+                  document.getElementById("indexResult").innerHTML = `
+                    <div class="alert alert-danger" role="alert">
+                      Error: ${data.message}
+                    </div>`;
+                }
+              })
+              .catch(error => {
+                document.getElementById("indexSpinner").style.display = "none";
+                document.getElementById("indexResult").innerHTML = `
+                  <div class="alert alert-danger" role="alert">
+                    Error: ${error.message}
+                  </div>`;
+              });
+          }
+        };
+
+        // Upload File button handler
+        document.getElementById("uploadFileButton").addEventListener("click", function() {
+          const fileInput = document.getElementById("fileUpload");
+          if (!fileInput.files || fileInput.files.length === 0) {
+            document.getElementById("indexResult").innerHTML = `
+              <div class="alert alert-warning" role="alert">
+                Please select a file to upload.
+              </div>`;
+            return;
+          }
+          
+          // Validate file extension
+          const fileName = fileInput.files[0].name;
+          const fileExt = fileName.split('.').pop().toLowerCase();
+          const validExtensions = ['pdf', 'txt', 'docx', 'doc', 'csv', 'md'];
+          
+          if (!validExtensions.includes(fileExt)) {
+            document.getElementById("indexResult").innerHTML = `
+              <div class="alert alert-warning" role="alert">
+                Invalid file type: .${fileExt}. Supported formats: PDF, TXT, DOCX, DOC, CSV, MD.
+              </div>`;
+            return;
+          }
+          
+          document.getElementById("indexSpinner").style.display = "block";
+          document.getElementById("indexResult").innerHTML = "";
+          
+          const formData = new FormData();
+          formData.append("file", fileInput.files[0]);
+          formData.append("index_after_upload", "false"); // Explicitly set to NOT index
+          
+          fetch("/index_documents", {
+            method: "POST",
+            body: formData,
+          })
+            .then(response => response.json())
+            .then(data => {
+              document.getElementById("indexSpinner").style.display = "none";
+              if (data.success) {
+                document.getElementById("indexResult").innerHTML = `
+                  <div class="alert alert-success" role="alert">
+                    File uploaded to data directory successfully!
+                  </div>`;
+                  
+                // Reset file input
+                fileInput.value = "";
+                const displayDiv = document.getElementById("fileUploadContainer").querySelector("div");
+                displayDiv.innerHTML = `
+                  <i class="bi bi-cloud-upload"></i>
+                  <h5>Drag & Drop Files Here</h5>
+                  <p>Or click to select files</p>
+                  <p class="text-muted small">Supported formats: PDF, TXT, DOCX, CSV, MD</p>
+                `;
+                
+                // Refresh the data files list
+                loadDataFiles();
+              } else {
+                document.getElementById("indexResult").innerHTML = `
+                  <div class="alert alert-danger" role="alert">
+                    Error: ${data.message}
+                  </div>
+                  <div class="mt-3">
+                    <small class="text-muted">Details:</small>
+                    <pre class="mt-2 p-2 bg-light">${data.details || 'No details available'}</pre>
+                  </div>`;
+              }
+            })
+            .catch(error => {
+              document.getElementById("indexSpinner").style.display = "none";
+              document.getElementById("indexResult").innerHTML = `
+                <div class="alert alert-danger" role="alert">
+                  Error: ${error.message}
+                </div>`;
+            });
+        });
+        
+        // Empty Vector Database button handler
+        document.getElementById("emptyVectorDbButton").addEventListener("click", function() {
+          if (confirm("Are you sure you want to empty the vector database? This will remove all indexed documents but keep your files in the data directory.")) {
+            document.getElementById("indexSpinner").style.display = "block";
+            document.getElementById("indexResult").innerHTML = "";
+            
+            fetch("/empty_vector_db", {
+              method: "POST"
+            })
+              .then(response => response.json())
+              .then(data => {
+                document.getElementById("indexSpinner").style.display = "none";
+                if (data.success) {
+                  document.getElementById("indexResult").innerHTML = `
+                    <div class="alert alert-success" role="alert">
+                      ${data.message}
+                    </div>
+                    <p class="small text-muted">Backup created at: ${data.backup || 'No backup'}</p>`;
+                    
+                  // Refresh the indexed files list
+                  loadIndexedFiles();
+                } else {
+                  document.getElementById("indexResult").innerHTML = `
+                    <div class="alert alert-danger" role="alert">
+                      Error: ${data.message}
+                    </div>
+                    <div class="mt-3">
+                      <small class="text-muted">Details:</small>
+                      <pre class="mt-2 p-2 bg-light">${data.details || 'No details available'}</pre>
+                    </div>`;
+                }
+              })
+              .catch(error => {
+                document.getElementById("indexSpinner").style.display = "none";
+                document.getElementById("indexResult").innerHTML = `
+                  <div class="alert alert-danger" role="alert">
+                    Error: ${error.message}
+                  </div>`;
+              });
+          }
+        });
+        
+        // Refresh Data Files button handler
+        document.getElementById("refreshDataFilesButton").addEventListener("click", loadDataFiles);
+        
+        // Refresh Indexed Files button handler
+        document.getElementById("refreshIndexedFilesButton").addEventListener("click", loadIndexedFiles);
+        
+        // Modify the Index All Files button handler (remove resetDb option)
+        document.getElementById("indexButton").addEventListener("click", function() {
+          document.getElementById("indexSpinner").style.display = "block";
+          document.getElementById("indexResult").innerHTML = "";
+          
+          const formData = new FormData();
+          
+          fetch("/index_documents", {
+            method: "POST",
+            body: formData
+          })
+            .then(response => response.json())
+            .then(data => {
+              document.getElementById("indexSpinner").style.display = "none";
+              if (data.success) {
+                document.getElementById("indexResult").innerHTML = `
+                  <div class="alert alert-success" role="alert">
+                    ${data.message}
+                  </div>
+                  <div class="mt-3">
+                    <small class="text-muted">Details:</small>
+                    <pre class="mt-2 p-2 bg-light">${data.details || 'No details available'}</pre>
+                  </div>`;
+                  
+                // Refresh the indexed files list
+                loadIndexedFiles();
+              } else {
+                document.getElementById("indexResult").innerHTML = `
+                  <div class="alert alert-danger" role="alert">
+                    Error: ${data.message}
+                  </div>
+                  <div class="mt-3">
+                    <small class="text-muted">Details:</small>
+                    <pre class="mt-2 p-2 bg-light">${data.details || 'No details available'}</pre>
+                  </div>`;
+              }
+            })
+            .catch(error => {
+              document.getElementById("indexSpinner").style.display = "none";
+              document.getElementById("indexResult").innerHTML = `
+                <div class="alert alert-danger" role="alert">
+                  Error: ${error.message}
+                </div>`;
+            });
+        });
+
+        // Refresh both file lists when index tab is shown
+        document.querySelector('button[data-bs-target="#index"]').addEventListener("click", function() {
+          loadDataFiles();
+          loadIndexedFiles();
+        });
       });
     </script>
   </body>
